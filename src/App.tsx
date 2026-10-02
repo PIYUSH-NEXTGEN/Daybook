@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import logo from './assets/images/logo-nobg.webp'
 import { InteractiveBook } from './components/InteractiveBook'
+import { AboutPage } from './components/AboutPage'
 import { JournalToolbar, defaultTextStyle, type JournalTextStyle } from './components/JournalToolbar'
 
 const navItems = ['Home', 'Journal', 'About'] as const
@@ -156,6 +157,7 @@ function App() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('Book')
   const [pendingSidebarTab, setPendingSidebarTab] = useState<SidebarTab | null>(null)
   const [isClosingBook, setIsClosingBook] = useState(false)
+  const [isOpeningFromAbout, setIsOpeningFromAbout] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [homeTextState, setHomeTextState] = useState<'visible' | 'fading-out' | 'hidden' | 'entering'>('visible')
@@ -169,12 +171,21 @@ function App() {
     return defaultTextStyle
   })
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const openingFromAboutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     try {
       localStorage.setItem('daybook_journal_text_style', JSON.stringify(textStyle))
     } catch {}
   }, [textStyle])
+
+  useEffect(() => {
+    return () => {
+      if (openingFromAboutTimerRef.current) {
+        clearTimeout(openingFromAboutTimerRef.current)
+      }
+    }
+  }, [])
 
   function handleSelectSidebarTab(tab: SidebarTab) {
     if (tab === activeSidebarTab && !isClosingBook) return
@@ -193,8 +204,13 @@ function App() {
   }
 
   function handleOpenJournal() {
-    if (activePage === 'Journal' && activeSidebarTab === 'Book') return
+    if (activePage === 'Journal' && activeSidebarTab === 'Book' && !isOpeningFromAbout) return
     if (homeTextState === 'fading-out') return
+
+    if (openingFromAboutTimerRef.current) {
+      clearTimeout(openingFromAboutTimerRef.current)
+      openingFromAboutTimerRef.current = null
+    }
 
     if (activePage === 'Home') {
       setHomeTextState('fading-out')
@@ -203,6 +219,14 @@ function App() {
         setActiveSidebarTab('Book')
         setHomeTextState('hidden')
       }, 320)
+    } else if (activePage === 'About') {
+      setIsOpeningFromAbout(true)
+      setActivePage('Journal')
+      setActiveSidebarTab('Book')
+      openingFromAboutTimerRef.current = setTimeout(() => {
+        setIsOpeningFromAbout(false)
+        openingFromAboutTimerRef.current = null
+      }, 60)
     } else {
       setActivePage('Journal')
       setActiveSidebarTab('Book')
@@ -210,8 +234,19 @@ function App() {
   }
 
   function handleNavigatePage(page: NavItem) {
-    if (page === activePage && !isClosingBook) return
+    if (page === activePage && !isClosingBook) {
+      if (page === 'Journal' && activeSidebarTab !== 'Book') {
+        setActiveSidebarTab('Book')
+      }
+      return
+    }
     if (homeTextState === 'fading-out') return
+
+    if (openingFromAboutTimerRef.current) {
+      clearTimeout(openingFromAboutTimerRef.current)
+      openingFromAboutTimerRef.current = null
+      setIsOpeningFromAbout(false)
+    }
 
     if (activePage === 'Home' && page !== 'Home') {
       if (page === 'Journal') {
@@ -223,6 +258,11 @@ function App() {
         setActivePage(page)
         setHomeTextState('hidden')
       }, 320)
+      return
+    }
+
+    if (activePage === 'About' && page === 'Journal') {
+      handleOpenJournal()
       return
     }
 
@@ -418,20 +458,17 @@ function App() {
         </div>
       </header>
 
-      <main className={`flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-16 lg:px-20 overflow-x-hidden ${
-        activePage === 'Journal' && activeSidebarTab === 'Book'
-          ? 'py-1 sm:py-2 lg:py-3'
-          : activePage === 'Home'
-            ? 'py-1 sm:py-2 lg:py-3'
-            : 'py-4 sm:py-6 md:py-8'
+      <main className={`flex-1 flex flex-col px-6 sm:px-12 md:px-16 lg:px-20 overflow-x-hidden ${
+        activePage === 'About'
+          ? 'justify-start py-6 sm:py-10 md:py-14'
+          : activePage === 'Journal' && activeSidebarTab === 'Book'
+            ? 'justify-center py-2 sm:py-3 lg:py-4'
+            : activePage === 'Home'
+              ? 'justify-center py-2 sm:py-3 lg:py-4'
+              : 'justify-center py-4 sm:py-6 md:py-8'
       }`}>
         {activePage === 'About' ? (
-          <div className="w-full max-w-3xl mx-auto bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-8 sm:p-12 animate-in fade-in duration-500">
-            <h2 className="text-3xl font-bold text-[#1a2b49] mb-4">About DayBook</h2>
-            <p className="text-lg text-slate-600 leading-relaxed">
-              DayBook is your daily sanctuary for mindful reflection, personal growth, and creative journaling.
-            </p>
-          </div>
+          <AboutPage onStartWriting={handleOpenJournal} />
         ) : (
           <div className="w-full max-w-[1440px] mx-auto flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-8 relative">
             <div
@@ -722,7 +759,12 @@ function App() {
               }`}
             >
               <InteractiveBook
-                isOpen={activePage === 'Journal' && activeSidebarTab === 'Book' && !isClosingBook}
+                isOpen={
+                  activePage === 'Journal' &&
+                  activeSidebarTab === 'Book' &&
+                  !isClosingBook &&
+                  !isOpeningFromAbout
+                }
                 textStyle={textStyle}
                 onOpen={handleOpenJournal}
                 onClose={() => handleNavigatePage('Home')}
