@@ -25,7 +25,7 @@ export function JournalBook({ onClick, className = '' }: JournalBookProps) {
         }}
       />
 
-      <div className="absolute left-0 right-[-5px] top-0 bottom-[-5px] rounded-tl-[24px] rounded-bl-[22px] rounded-tr-[24px] rounded-br-[26px] bg-gradient-to-br from-[#7bbbf8] to-[#5094d8] border border-[#4889cb] shadow-lg z-0" />
+      <div className="absolute left-0 right-[-3px] top-0 bottom-[-3px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] bg-gradient-to-br from-[#68abf0] via-[#4d92dd] to-[#367ec7] border border-[#3b7ebe] shadow-lg z-0" />
 
       <div className="absolute right-[-2px] sm:right-[-3px] top-3.5 bottom-3.5 w-4 sm:w-5 bg-gradient-to-r from-[#e3ddce] via-[#f9f6ee] to-[#ede7dc] rounded-r-md border-l border-slate-300/70 shadow-[inset_2px_0_4px_rgba(0,0,0,0.12)] z-1 flex flex-col justify-evenly py-2 overflow-hidden">
         <div className="w-full h-px bg-slate-300/60" />
@@ -42,13 +42,21 @@ export function JournalBook({ onClick, className = '' }: JournalBookProps) {
       </div>
 
       <div className="relative w-[280px] sm:w-[320px] md:w-[350px] h-[380px] sm:h-[435px] md:h-[475px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] shadow-[2px_4px_12px_rgba(15,30,55,0.26),0_20px_40px_-15px_rgba(20,45,80,0.28)] z-10">
-        <div className="relative w-full h-full rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] overflow-hidden bg-[#8dc0f8] border border-white/25">
+        <div
+          className="relative w-full h-full rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] overflow-hidden bg-[#8dc0f8] border border-white/25 shadow-md"
+          style={{
+            clipPath: 'inset(0 round 24px 24px 24px 20px)'
+          }}
+        >
           <img
             src={sceneImg}
             alt="DayBook cover scene"
             width={1024}
             height={1536}
-            className="w-full h-full object-cover select-none"
+            className="w-full h-full object-cover select-none rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px]"
+            style={{
+              clipPath: 'inset(0 round 24px 24px 24px 20px)'
+            }}
           />
 
           <div className="absolute inset-0 bg-gradient-to-tr from-black/10 via-transparent to-white/20 pointer-events-none" />

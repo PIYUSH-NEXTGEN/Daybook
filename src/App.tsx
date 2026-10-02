@@ -10,7 +10,7 @@ import {
   CheckCircle2
 } from 'lucide-react'
 import logo from './assets/images/logo-nobg.webp'
-import { JournalBook } from './components/JournalBook'
+import { InteractiveBook } from './components/InteractiveBook'
 
 const navItems = ['Home', 'Journal', 'About'] as const
 type NavItem = (typeof navItems)[number]
@@ -82,7 +82,7 @@ type TimePhase = 'sun' | 'sunset' | 'moon'
 function getTimeInfo(date: Date): { greeting: string; phase: TimePhase } {
   const hour = date.getHours()
 
-  if (hour >= 5 && hour < 12) {
+  if (hour >= 0 && hour < 12) {
     return { greeting: 'Good morning,', phase: 'sun' }
   }
   if (hour >= 12 && hour < 17) {
@@ -153,12 +153,41 @@ function renderTimeIcon(phase: TimePhase) {
 function App() {
   const [activePage, setActivePage] = useState<NavItem>('Home')
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('Book')
-  const [bookEntryText, setBookEntryText] = useState('')
-  const [selectedMood, setSelectedMood] = useState<string | null>('Peaceful')
-  const [isEntrySaved, setIsEntrySaved] = useState(false)
+  const [pendingSidebarTab, setPendingSidebarTab] = useState<SidebarTab | null>(null)
+  const [isClosingBook, setIsClosingBook] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const userMenuRef = useRef<HTMLDivElement>(null)
+
+  function handleSelectSidebarTab(tab: SidebarTab) {
+    if (tab === activeSidebarTab && !isClosingBook) return
+
+    if (activeSidebarTab === 'Book' && tab !== 'Book' && activePage === 'Journal') {
+      setIsClosingBook(true)
+      setPendingSidebarTab(tab)
+      setTimeout(() => {
+        setActiveSidebarTab(tab)
+        setPendingSidebarTab(null)
+        setIsClosingBook(false)
+      }, 500)
+    } else {
+      setActiveSidebarTab(tab)
+    }
+  }
+
+  function handleNavigatePage(page: NavItem) {
+    if (page === activePage && !isClosingBook) return
+
+    if (activePage === 'Journal' && activeSidebarTab === 'Book' && page !== 'Journal') {
+      setIsClosingBook(true)
+      setTimeout(() => {
+        setActivePage(page)
+        setIsClosingBook(false)
+      }, 500)
+    } else {
+      setActivePage(page)
+    }
+  }
 
   const timeInfo = getTimeInfo(currentTime)
   const formattedDate = currentTime.toLocaleDateString('en-US', {
@@ -192,6 +221,10 @@ function App() {
       <header className="relative px-6 py-5 sm:px-8 sm:py-6 flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-4">
         <a
           href="/"
+          onClick={(e) => {
+            e.preventDefault()
+            handleNavigatePage('Home')
+          }}
           className="self-start sm:self-auto inline-flex items-center gap-1.5 sm:gap-2 transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6eafe9] rounded-lg"
         >
           <img
@@ -215,7 +248,7 @@ function App() {
               <button
                 key={item}
                 type="button"
-                onClick={() => setActivePage(item)}
+                onClick={() => handleNavigatePage(item)}
                 className={`relative py-1 font-medium transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 rounded-sm ${
                   isActive
                     ? 'text-[#6eafe9] font-semibold'
@@ -287,6 +320,7 @@ function App() {
                   onClick={() => {
                     setIsUserMenuOpen(false)
                     setActivePage('Journal')
+                    setActiveSidebarTab('Book')
                   }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#6eafe9] hover:bg-[#5b9fe0] text-white font-semibold text-xs sm:text-sm rounded-xl shadow-md shadow-[#6eafe9]/20 hover:shadow-lg hover:shadow-[#6eafe9]/30 transition-all duration-200 cursor-pointer"
                 >
@@ -299,7 +333,7 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col justify-start pt-5 sm:pt-10 md:pt-12 px-6 sm:px-12 md:px-16 lg:px-20 pb-12 overflow-x-hidden">
+      <main className="flex-1 flex flex-col justify-center py-4 sm:py-6 md:py-8 px-6 sm:px-12 md:px-16 lg:px-20 overflow-x-hidden">
         {activePage === 'About' ? (
           <div className="w-full max-w-3xl mx-auto bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-8 sm:p-12 animate-in fade-in duration-500">
             <h2 className="text-3xl font-bold text-[#1a2b49] mb-4">About DayBook</h2>
@@ -308,19 +342,21 @@ function App() {
             </p>
           </div>
         ) : (
-          <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-between gap-8 lg:gap-6 relative">
+          <div className="w-full max-w-[1440px] mx-auto flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-8 relative">
             <div
-              className={`transition-[width] duration-700 delay-[260ms] ease-in-out flex flex-col items-start min-w-0 relative -translate-y-3 sm:-translate-y-5 lg:-translate-y-7 ${
+              className={`transition-all duration-700 ease-in-out flex flex-col items-start min-w-0 relative -translate-y-3 sm:-translate-y-5 lg:-translate-y-7 ${
                 activePage === 'Journal'
-                  ? 'w-full lg:w-[62%]'
+                  ? activeSidebarTab === 'Book' || isClosingBook
+                    ? 'w-full lg:w-22 flex-shrink-0'
+                    : 'w-full lg:w-[62%]'
                   : 'w-full lg:w-[32%]'
               }`}
             >
               <div
                 className={`w-full flex flex-col items-start ${
                   activePage === 'Home'
-                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out delay-[800ms]'
-                    : 'opacity-0 -translate-x-6 absolute pointer-events-none transition-all duration-250 ease-in delay-0'
+                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out delay-[200ms]'
+                    : 'opacity-0 -translate-x-6 absolute pointer-events-none transition-all duration-200 ease-in delay-0'
                 }`}
               >
                 <div className="flex items-center gap-5 sm:gap-6 mb-8 sm:mb-10 pt-3 sm:pt-4 lg:pt-6">
@@ -351,19 +387,19 @@ function App() {
               <div
                 className={`w-full ${
                   activePage === 'Journal'
-                    ? 'opacity-100 translate-x-0 relative pointer-events-auto scale-100 transition-all duration-500 ease-out delay-[800ms]'
-                    : 'opacity-0 -translate-x-6 absolute pointer-events-none scale-98 transition-all duration-250 ease-in delay-0'
+                    ? 'opacity-100 translate-x-0 relative pointer-events-auto scale-100 transition-all duration-500 ease-out delay-[200ms]'
+                    : 'opacity-0 -translate-x-6 absolute pointer-events-none scale-98 transition-all duration-200 ease-in delay-0'
                 }`}
               >
                 <div className="w-full flex flex-col md:flex-row gap-4 sm:gap-5 lg:gap-6 items-start">
                   <div className="w-full md:w-20 lg:w-22 bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 py-3 sm:py-4 px-1.5 sm:px-2 flex flex-row md:flex-col items-center justify-around md:justify-start gap-1 sm:gap-2.5 md:gap-3 flex-shrink-0 overflow-x-auto scrollbar-none">
                     {sidebarItems.map(({ id, label, icon: Icon }) => {
-                      const isActive = activeSidebarTab === id
+                      const isActive = (pendingSidebarTab || activeSidebarTab) === id
                       return (
                         <button
                           key={id}
                           type="button"
-                          onClick={() => setActiveSidebarTab(id)}
+                          onClick={() => handleSelectSidebarTab(id)}
                           className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
                             isActive
                               ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-sm font-semibold'
@@ -381,26 +417,27 @@ function App() {
                     })}
                   </div>
 
-                  <div className="flex-1 w-full bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-6 sm:p-8 min-h-[460px] flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
-                        <div>
-                          <span className="text-xs sm:text-sm font-semibold tracking-wider text-[#6eafe9] uppercase">
-                            DayBook
-                          </span>
-                          <h2 className="text-2xl sm:text-3xl font-bold text-[#1a2b49] mt-0.5">
-                            {activeSidebarTab}
-                          </h2>
+                  {activeSidebarTab !== 'Book' && !isClosingBook && (
+                    <div className="flex-1 w-full bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-6 sm:p-8 min-h-[460px] flex flex-col justify-between animate-in fade-in duration-300">
+                      <div>
+                        <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
+                          <div>
+                            <span className="text-xs sm:text-sm font-semibold tracking-wider text-[#6eafe9] uppercase">
+                              DayBook
+                            </span>
+                            <h2 className="text-2xl sm:text-3xl font-bold text-[#1a2b49] mt-0.5">
+                              {activeSidebarTab}
+                            </h2>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleNavigatePage('Home')}
+                            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-[#6eafe9] transition-colors cursor-pointer group"
+                          >
+                            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                            <span>Home</span>
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setActivePage('Home')}
-                          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-[#6eafe9] transition-colors cursor-pointer group"
-                        >
-                          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-                          <span>Home</span>
-                        </button>
-                      </div>
 
                       {activeSidebarTab === 'Analytics' && (
                         <div className="space-y-6">
@@ -444,76 +481,6 @@ function App() {
                                   <span className="text-[11px] text-slate-400 font-medium">{day}</span>
                                 </div>
                               ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {activeSidebarTab === 'Book' && (
-                        <div className="space-y-4">
-                          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF9F5] border border-slate-100">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-xl bg-[#6eafe9]/15 flex items-center justify-center text-[#6eafe9]">
-                                  <BookNavIcon className="w-4 h-4" />
-                                </div>
-                                <div>
-                                  <h4 className="text-sm font-bold text-[#1a2b49]">Current Book</h4>
-                                  <span className="text-xs text-slate-400">Volume III: Autumn Stillness</span>
-                                </div>
-                              </div>
-                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white text-[#6eafe9] border border-[#6eafe9]/30 shadow-xs">
-                                Page 48 of 120
-                              </span>
-                            </div>
-                            <div className="w-full h-2 bg-slate-200/70 rounded-full overflow-hidden">
-                              <div className="h-full bg-[#6eafe9] rounded-full" style={{ width: '40%' }} />
-                            </div>
-                          </div>
-
-                          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF9F5] border border-slate-100 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <label htmlFor="book-quick-reflection" className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                                Today&apos;s Reflection
-                              </label>
-                              <span className="text-xs text-slate-400 font-medium">
-                                {bookEntryText.trim().split(/\s+/).filter(Boolean).length} words
-                              </span>
-                            </div>
-                            <textarea
-                              id="book-quick-reflection"
-                              value={bookEntryText}
-                              onChange={(e) => setBookEntryText(e.target.value)}
-                              placeholder="What made today meaningful? Note down your thoughts..."
-                              className="w-full h-28 p-3 rounded-xl bg-white border border-slate-200/80 text-sm text-[#1a2b49] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6eafe9]/40 resize-none font-sans leading-relaxed"
-                            />
-                            <div className="flex items-center justify-between pt-1">
-                              <div className="flex items-center gap-1.5">
-                                {(['Peaceful', 'Grateful', 'Focused', 'Inspired'] as const).map((mood) => (
-                                  <button
-                                    key={mood}
-                                    type="button"
-                                    onClick={() => setSelectedMood(selectedMood === mood ? null : mood)}
-                                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                                      selectedMood === mood
-                                        ? 'bg-[#6eafe9] text-white border-[#6eafe9] font-medium shadow-xs'
-                                        : 'bg-white text-slate-500 border-slate-200/70 hover:border-slate-300'
-                                    }`}
-                                  >
-                                    {mood}
-                                  </button>
-                                ))}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsEntrySaved(true)
-                                  setTimeout(() => setIsEntrySaved(false), 2000)
-                                }}
-                                className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#6eafe9] hover:bg-[#5b9fe0] text-white transition-all cursor-pointer shadow-xs"
-                              >
-                                {isEntrySaved ? 'Saved!' : 'Save Entry'}
-                              </button>
                             </div>
                           </div>
                         </div>
@@ -645,38 +612,44 @@ function App() {
                       )}
                     </div>
                   </div>
+                )}
                 </div>
               </div>
             </div>
 
             <div
-              className={`transition-[width] duration-700 delay-[260ms] ease-in-out flex flex-col items-center justify-start flex-shrink-0 z-10 -translate-y-4 sm:-translate-y-6 lg:-translate-y-8 py-2 ${
+              className={`transition-all duration-700 ease-in-out flex flex-col items-center justify-start z-10 -translate-y-4 sm:-translate-y-6 lg:-translate-y-8 py-2 ${
                 activePage === 'Journal'
-                  ? 'hidden lg:flex lg:w-[35%]'
-                  : 'flex w-full lg:w-[36%]'
+                  ? activeSidebarTab === 'Book' || isClosingBook
+                    ? 'w-full lg:flex-1 flex justify-center'
+                    : 'w-full lg:w-[35%] flex-shrink-0 flex justify-center'
+                  : 'w-full lg:w-[36%] flex-shrink-0 flex justify-center'
               }`}
             >
-              <JournalBook
-                onClick={() => {
-                  if (activePage === 'Home') {
-                    setActivePage('Journal')
-                  }
+              <InteractiveBook
+                isOpen={activePage === 'Journal' && activeSidebarTab === 'Book' && !isClosingBook}
+                onOpen={() => {
+                  setActivePage('Journal')
+                  setActiveSidebarTab('Book')
                 }}
+                onClose={() => handleNavigatePage('Home')}
               />
             </div>
 
             <div
-              className={`transition-[width] duration-700 delay-[260ms] ease-in-out flex flex-col items-start min-w-0 ${
+              className={`transition-all duration-700 ease-in-out flex flex-col items-start min-w-0 ${
                 activePage === 'Journal'
-                  ? 'w-0 pointer-events-none overflow-hidden lg:w-0 lg:p-0'
+                  ? activeSidebarTab === 'Book' || isClosingBook
+                    ? 'w-0 lg:w-22 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0 flex-shrink-0'
+                    : 'w-0 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0'
                   : 'w-full lg:w-[32%] pointer-events-auto lg:pl-6'
               }`}
             >
               <div
                 className={`w-full flex flex-col items-start pt-6 sm:pt-10 ${
                   activePage === 'Home'
-                    ? 'opacity-100 translate-x-0 transition-all duration-500 ease-out delay-[800ms]'
-                    : 'opacity-0 translate-x-6 transition-all duration-250 ease-in delay-0 pointer-events-none'
+                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out delay-[200ms]'
+                    : 'opacity-0 translate-x-6 absolute pointer-events-none transition-all duration-200 ease-in delay-0'
                 }`}
               >
                 <span className="text-sm sm:text-base font-medium text-slate-400 mb-2">
@@ -690,7 +663,10 @@ function App() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setActivePage('Journal')}
+                  onClick={() => {
+                    setActivePage('Journal')
+                    setActiveSidebarTab('Book')
+                  }}
                   className="group inline-flex items-center gap-2.5 px-6 py-3.5 bg-[#6eafe9] hover:bg-[#5b9fe0] text-white font-semibold text-base rounded-2xl shadow-lg shadow-[#6eafe9]/25 hover:shadow-xl hover:shadow-[#6eafe9]/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
                 >
                   <Pencil className="w-5 h-5" />
