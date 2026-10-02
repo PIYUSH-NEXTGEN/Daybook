@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import logo from './assets/images/logo-nobg.webp'
 import { InteractiveBook } from './components/InteractiveBook'
+import { JournalToolbar, defaultTextStyle, type JournalTextStyle } from './components/JournalToolbar'
 
 const navItems = ['Home', 'Journal', 'About'] as const
 type NavItem = (typeof navItems)[number]
@@ -157,7 +158,23 @@ function App() {
   const [isClosingBook, setIsClosingBook] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
+  const [homeTextState, setHomeTextState] = useState<'visible' | 'fading-out' | 'hidden' | 'entering'>('visible')
+  const [textStyle, setTextStyle] = useState<JournalTextStyle>(() => {
+    try {
+      const saved = localStorage.getItem('daybook_journal_text_style')
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch {}
+    return defaultTextStyle
+  })
   const userMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('daybook_journal_text_style', JSON.stringify(textStyle))
+    } catch {}
+  }, [textStyle])
 
   function handleSelectSidebarTab(tab: SidebarTab) {
     if (tab === activeSidebarTab && !isClosingBook) return
@@ -175,18 +192,83 @@ function App() {
     }
   }
 
+  function handleOpenJournal() {
+    if (activePage === 'Journal' && activeSidebarTab === 'Book') return
+    if (homeTextState === 'fading-out') return
+
+    if (activePage === 'Home') {
+      setHomeTextState('fading-out')
+      setTimeout(() => {
+        setActivePage('Journal')
+        setActiveSidebarTab('Book')
+        setHomeTextState('hidden')
+      }, 320)
+    } else {
+      setActivePage('Journal')
+      setActiveSidebarTab('Book')
+    }
+  }
+
   function handleNavigatePage(page: NavItem) {
     if (page === activePage && !isClosingBook) return
+    if (homeTextState === 'fading-out') return
+
+    if (activePage === 'Home' && page !== 'Home') {
+      if (page === 'Journal') {
+        handleOpenJournal()
+        return
+      }
+      setHomeTextState('fading-out')
+      setTimeout(() => {
+        setActivePage(page)
+        setHomeTextState('hidden')
+      }, 320)
+      return
+    }
+
+    if (activePage === 'Journal' && activeSidebarTab === 'Book' && page === 'Home') {
+      setIsClosingBook(true)
+      setHomeTextState('hidden')
+      setTimeout(() => {
+        setActivePage('Home')
+        setIsClosingBook(false)
+        setTimeout(() => {
+          setHomeTextState('entering')
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setHomeTextState('visible')
+            })
+          })
+        }, 650)
+      }, 480)
+      return
+    }
 
     if (activePage === 'Journal' && activeSidebarTab === 'Book' && page !== 'Journal') {
       setIsClosingBook(true)
       setTimeout(() => {
         setActivePage(page)
         setIsClosingBook(false)
-      }, 500)
-    } else {
-      setActivePage(page)
+      }, 480)
+      return
     }
+
+    if (page === 'Home') {
+      const isFromAbout = activePage === 'About'
+      setHomeTextState('hidden')
+      setActivePage('Home')
+      setTimeout(() => {
+        setHomeTextState('entering')
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setHomeTextState('visible')
+          })
+        })
+      }, isFromAbout ? 100 : 650)
+      return
+    }
+
+    setActivePage(page)
   }
 
   const timeInfo = getTimeInfo(currentTime)
@@ -217,8 +299,12 @@ function App() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#FAF9F5] text-[#464e5c] flex flex-col">
-      <header className="relative px-6 py-5 sm:px-8 sm:py-6 flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-4">
+    <div className={`bg-[#FAF9F5] text-[#464e5c] flex flex-col ${
+      activePage === 'Home'
+        ? 'min-h-screen overflow-y-auto lg:h-screen lg:max-h-screen lg:overflow-hidden scrollbar-none'
+        : 'min-h-screen'
+    }`}>
+      <header className="relative px-6 py-5 sm:px-8 sm:py-6 flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-4 flex-shrink-0">
         <a
           href="/"
           onClick={(e) => {
@@ -319,8 +405,7 @@ function App() {
                   type="button"
                   onClick={() => {
                     setIsUserMenuOpen(false)
-                    setActivePage('Journal')
-                    setActiveSidebarTab('Book')
+                    handleOpenJournal()
                   }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#6eafe9] hover:bg-[#5b9fe0] text-white font-semibold text-xs sm:text-sm rounded-xl shadow-md shadow-[#6eafe9]/20 hover:shadow-lg hover:shadow-[#6eafe9]/30 transition-all duration-200 cursor-pointer"
                 >
@@ -333,7 +418,13 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col justify-center py-4 sm:py-6 md:py-8 px-6 sm:px-12 md:px-16 lg:px-20 overflow-x-hidden">
+      <main className={`flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-16 lg:px-20 overflow-x-hidden ${
+        activePage === 'Journal' && activeSidebarTab === 'Book'
+          ? 'py-1 sm:py-2 lg:py-3'
+          : activePage === 'Home'
+            ? 'py-1 sm:py-2 lg:py-3'
+            : 'py-4 sm:py-6 md:py-8'
+      }`}>
         {activePage === 'About' ? (
           <div className="w-full max-w-3xl mx-auto bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-8 sm:p-12 animate-in fade-in duration-500">
             <h2 className="text-3xl font-bold text-[#1a2b49] mb-4">About DayBook</h2>
@@ -344,22 +435,26 @@ function App() {
         ) : (
           <div className="w-full max-w-[1440px] mx-auto flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-8 relative">
             <div
-              className={`transition-all duration-700 ease-in-out flex flex-col items-start min-w-0 relative -translate-y-3 sm:-translate-y-5 lg:-translate-y-7 ${
+              className={`transition-all duration-700 ease-in-out flex flex-col items-start min-w-0 relative ${
                 activePage === 'Journal'
                   ? activeSidebarTab === 'Book' || isClosingBook
-                    ? 'w-full lg:w-22 flex-shrink-0'
-                    : 'w-full lg:w-[62%]'
-                  : 'w-full lg:w-[32%]'
+                    ? 'w-full lg:w-22 flex-shrink-0 -translate-y-3 sm:-translate-y-5 lg:-translate-y-7'
+                    : 'w-full lg:w-[62%] -translate-y-3 sm:-translate-y-5 lg:-translate-y-7'
+                  : 'w-full lg:w-[32%] translate-y-0'
               }`}
             >
               <div
                 className={`w-full flex flex-col items-start ${
-                  activePage === 'Home'
-                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out delay-[200ms]'
-                    : 'opacity-0 -translate-x-6 absolute pointer-events-none transition-all duration-200 ease-in delay-0'
+                  homeTextState === 'visible' && activePage === 'Home'
+                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out'
+                    : homeTextState === 'fading-out'
+                      ? 'opacity-0 -translate-x-6 relative pointer-events-none transition-all duration-300 ease-out'
+                      : homeTextState === 'entering'
+                        ? 'opacity-0 -translate-x-6 relative pointer-events-none transition-none'
+                        : 'opacity-0 -translate-x-6 absolute top-0 left-0 h-0 max-h-0 overflow-hidden pointer-events-none transition-none'
                 }`}
               >
-                <div className="flex items-center gap-5 sm:gap-6 mb-8 sm:mb-10 pt-3 sm:pt-4 lg:pt-6">
+                <div className="flex items-center gap-5 sm:gap-6 mb-8 sm:mb-10 pt-10 sm:pt-14 lg:pt-20">
                   {renderTimeIcon(timeInfo.phase)}
                   <div className="flex flex-col">
                     <span className="text-slate-500 text-xl sm:text-2xl md:text-3xl font-medium">
@@ -371,7 +466,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="relative pl-8 sm:pl-10 pr-4 py-2 mt-24 sm:mt-28 md:mt-32 lg:mt-36">
+                <div className="relative pl-8 sm:pl-10 pr-4 py-2 mt-14 sm:mt-18 md:mt-22 lg:mt-24">
                   <span className="absolute -top-4 sm:-top-6 left-0 text-5xl sm:text-6xl md:text-7xl font-serif text-[#6eafe9]/70 select-none">
                     &ldquo;
                   </span>
@@ -388,7 +483,7 @@ function App() {
                 className={`w-full ${
                   activePage === 'Journal'
                     ? 'opacity-100 translate-x-0 relative pointer-events-auto scale-100 transition-all duration-500 ease-out delay-[200ms]'
-                    : 'opacity-0 -translate-x-6 absolute pointer-events-none scale-98 transition-all duration-200 ease-in delay-0'
+                    : 'opacity-0 -translate-x-6 absolute top-0 left-0 h-0 max-h-0 overflow-hidden pointer-events-none scale-98 transition-all duration-200 ease-in delay-0'
                 }`}
               >
                 <div className="w-full flex flex-col md:flex-row gap-4 sm:gap-5 lg:gap-6 items-start">
@@ -418,7 +513,7 @@ function App() {
                   </div>
 
                   {activeSidebarTab !== 'Book' && !isClosingBook && (
-                    <div className="flex-1 w-full bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-6 sm:p-8 min-h-[460px] flex flex-col justify-between animate-in fade-in duration-300">
+                    <div className="flex-1 w-full bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-6 sm:p-8 min-h-[460px] sm:min-h-[500px] lg:min-h-[545px] flex flex-col justify-between animate-in fade-in duration-300">
                       <div>
                         <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
                           <div>
@@ -628,10 +723,8 @@ function App() {
             >
               <InteractiveBook
                 isOpen={activePage === 'Journal' && activeSidebarTab === 'Book' && !isClosingBook}
-                onOpen={() => {
-                  setActivePage('Journal')
-                  setActiveSidebarTab('Book')
-                }}
+                textStyle={textStyle}
+                onOpen={handleOpenJournal}
                 onClose={() => handleNavigatePage('Home')}
               />
             </div>
@@ -639,17 +732,23 @@ function App() {
             <div
               className={`transition-all duration-700 ease-in-out flex flex-col items-start min-w-0 ${
                 activePage === 'Journal'
-                  ? activeSidebarTab === 'Book' || isClosingBook
-                    ? 'w-0 lg:w-22 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0 flex-shrink-0'
-                    : 'w-0 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0'
-                  : 'w-full lg:w-[32%] pointer-events-auto lg:pl-6'
+                  ? activeSidebarTab === 'Book' && !isClosingBook
+                    ? 'w-full lg:w-22 flex-shrink-0 pointer-events-auto -translate-y-3 sm:-translate-y-5 lg:-translate-y-7 relative z-20'
+                    : isClosingBook
+                      ? 'w-0 lg:w-22 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0 flex-shrink-0'
+                      : 'w-0 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0'
+                  : 'w-full lg:w-[32%] pointer-events-auto lg:pl-6 translate-y-0'
               }`}
             >
               <div
-                className={`w-full flex flex-col items-start pt-6 sm:pt-10 ${
-                  activePage === 'Home'
-                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out delay-[200ms]'
-                    : 'opacity-0 translate-x-6 absolute pointer-events-none transition-all duration-200 ease-in delay-0'
+                className={`w-full flex flex-col items-start pt-14 sm:pt-20 lg:pt-28 ${
+                  homeTextState === 'visible' && activePage === 'Home'
+                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out'
+                    : homeTextState === 'fading-out'
+                      ? 'opacity-0 translate-x-6 relative pointer-events-none transition-all duration-300 ease-out'
+                      : homeTextState === 'entering'
+                        ? 'opacity-0 translate-x-6 relative pointer-events-none transition-none'
+                        : 'opacity-0 translate-x-6 absolute top-0 left-0 h-0 max-h-0 overflow-hidden pointer-events-none transition-none'
                 }`}
               >
                 <span className="text-sm sm:text-base font-medium text-slate-400 mb-2">
@@ -663,10 +762,7 @@ function App() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setActivePage('Journal')
-                    setActiveSidebarTab('Book')
-                  }}
+                  onClick={handleOpenJournal}
                   className="group inline-flex items-center gap-2.5 px-6 py-3.5 bg-[#6eafe9] hover:bg-[#5b9fe0] text-white font-semibold text-base rounded-2xl shadow-lg shadow-[#6eafe9]/25 hover:shadow-xl hover:shadow-[#6eafe9]/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
                 >
                   <Pencil className="w-5 h-5" />
@@ -674,6 +770,18 @@ function App() {
                   <ArrowRight className="w-5 h-5 ml-1 transition-transform group-hover:translate-x-1" />
                 </button>
               </div>
+
+              {activePage === 'Journal' && (
+                <div
+                  className={`w-full flex justify-center transition-all duration-300 ${
+                    activeSidebarTab === 'Book' && !isClosingBook
+                      ? 'opacity-100 translate-x-0 pointer-events-auto'
+                      : 'opacity-0 translate-x-4 pointer-events-none hidden'
+                  }`}
+                >
+                  <JournalToolbar textStyle={textStyle} onUpdateTextStyle={setTextStyle} />
+                </div>
+              )}
             </div>
           </div>
         )}

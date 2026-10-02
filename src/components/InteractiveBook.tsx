@@ -1,20 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
-import { Sparkles, Heart, Share2, Sun, Check, Flame } from 'lucide-react'
+import { Sparkles, Heart, Share2, Sun, Flame } from 'lucide-react'
 import sceneImg from '../assets/images/scene.webp'
 import { OpenJournalSpread } from './OpenJournalSpread'
+import type { JournalTextStyle } from './JournalToolbar'
 
 interface InteractiveBookProps {
   isOpen: boolean
   onOpen: () => void
   onClose?: () => void
   className?: string
+  textStyle?: JournalTextStyle
 }
 
 export function InteractiveBook({
   isOpen,
   onOpen,
   onClose,
-  className = ''
+  className = '',
+  textStyle
 }: InteractiveBookProps) {
   const [stage, setStage] = useState<'closed' | 'opening' | 'open' | 'closing'>(
     isOpen ? 'open' : 'closed'
@@ -67,7 +70,7 @@ export function InteractiveBook({
   if (stage === 'open') {
     return (
       <div className={`w-full flex justify-center animate-in fade-in duration-300 ${className}`}>
-        <OpenJournalSpread onClose={onClose} />
+        <OpenJournalSpread onClose={onClose} textStyle={textStyle} />
       </div>
     )
   }
@@ -118,7 +121,7 @@ export function InteractiveBook({
       </div>
 
       <div
-        className="relative w-[280px] sm:w-[320px] md:w-[350px] h-[380px] sm:h-[435px] md:h-[475px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] shadow-[2px_4px_12px_rgba(15,30,55,0.26),0_20px_40px_-15px_rgba(20,45,80,0.28)] z-10"
+        className="relative w-[300px] sm:w-[340px] md:w-[380px] lg:w-[400px] h-[410px] sm:h-[465px] md:h-[515px] lg:h-[545px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] shadow-[2px_4px_12px_rgba(15,30,55,0.26),0_20px_40px_-15px_rgba(20,45,80,0.28)] z-10"
         style={{ perspective: '2200px' }}
       >
         <div
@@ -268,17 +271,9 @@ export function InteractiveBook({
                 />
               </div>
               <div className="space-y-1.5 pt-1">
-                <div className="flex items-center gap-2 text-[10px] text-slate-600">
-                  <div className="w-3.5 h-3.5 rounded bg-emerald-500 text-white flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span className="line-through text-slate-400">Morning meditation</span>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-slate-600">
-                  <div className="w-3.5 h-3.5 rounded bg-emerald-500 text-white flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span className="line-through text-slate-400">Write 3 gratitudes</span>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 italic">
+                  <div className="w-3.5 h-3.5 rounded border border-dashed border-slate-300 flex items-center justify-center" />
+                  <span>Add todays goals here</span>
                 </div>
               </div>
             </div>

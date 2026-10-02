@@ -41,7 +41,7 @@ export function JournalBook({ onClick, className = '' }: JournalBookProps) {
         <div className="h-full w-px bg-slate-300/60" />
       </div>
 
-      <div className="relative w-[280px] sm:w-[320px] md:w-[350px] h-[380px] sm:h-[435px] md:h-[475px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] shadow-[2px_4px_12px_rgba(15,30,55,0.26),0_20px_40px_-15px_rgba(20,45,80,0.28)] z-10">
+      <div className="relative w-[300px] sm:w-[340px] md:w-[380px] lg:w-[400px] h-[410px] sm:h-[465px] md:h-[515px] lg:h-[545px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] shadow-[2px_4px_12px_rgba(15,30,55,0.26),0_20px_40px_-15px_rgba(20,45,80,0.28)] z-10">
         <div
           className="relative w-full h-full rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] overflow-hidden bg-[#8dc0f8] border border-white/25 shadow-md"
           style={{
