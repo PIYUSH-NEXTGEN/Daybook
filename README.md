@@ -1,4 +1,9 @@
-# DayBook
+
+
+<p align="center">
+   <img src="./src/assets/images/logo-nobg.webp" alt="DayBook logo" width="280" height="240" />
+</p>
+
 
 DayBook is a private, local-first AI journal that learns your habits, identifies recurring patterns, and helps you reflect on what you could improve.
 
