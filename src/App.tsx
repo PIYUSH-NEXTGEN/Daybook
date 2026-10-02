@@ -1,10 +1,81 @@
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, PenLine, Pencil, ArrowRight } from 'lucide-react'
+import {
+  ChevronDown,
+  PenLine,
+  Pencil,
+  ArrowRight,
+  ArrowLeft,
+  Settings as SettingsIcon,
+  Bookmark,
+  CheckCircle2
+} from 'lucide-react'
 import logo from './assets/images/logo-nobg.webp'
 import { JournalBook } from './components/JournalBook'
 
 const navItems = ['Home', 'Journal', 'About'] as const
 type NavItem = (typeof navItems)[number]
+
+type SidebarTab = 'Analytics' | 'Book' | 'Calendar' | 'Goals' | 'Library' | 'Settings'
+
+function AnalyticsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 20v-4" />
+      <path d="M9 20v-8" />
+      <path d="M14 20v-14" />
+      <path d="M19 20v-10" />
+    </svg>
+  )
+}
+
+function BookNavIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" />
+    </svg>
+  )
+}
+
+function CalendarNavIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M8 2v3" />
+      <path d="M16 2v3" />
+      <rect width="18" height="17" x="3" y="4" rx="3" />
+      <path d="M3 10h18" />
+    </svg>
+  )
+}
+
+function GoalsIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <path d="M19 5l-5 5" />
+      <path d="M15 4h5v5" />
+    </svg>
+  )
+}
+
+function LibraryNavIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect width="13" height="13" x="8" y="8" rx="2.5" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h9c1.1 0 2 .9 2 2" />
+    </svg>
+  )
+}
+
+const sidebarItems = [
+  { id: 'Analytics' as const, label: 'Analytics', icon: AnalyticsIcon },
+  { id: 'Book' as const, label: 'Book', icon: BookNavIcon },
+  { id: 'Calendar' as const, label: 'Calendar', icon: CalendarNavIcon },
+  { id: 'Goals' as const, label: 'Goals', icon: GoalsIcon },
+  { id: 'Library' as const, label: 'Library', icon: LibraryNavIcon },
+  { id: 'Settings' as const, label: 'Settings', icon: SettingsIcon },
+]
 
 type TimePhase = 'sun' | 'sunset' | 'moon'
 
@@ -81,6 +152,10 @@ function renderTimeIcon(phase: TimePhase) {
 
 function App() {
   const [activePage, setActivePage] = useState<NavItem>('Home')
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('Book')
+  const [bookEntryText, setBookEntryText] = useState('')
+  const [selectedMood, setSelectedMood] = useState<string | null>('Peaceful')
+  const [isEntrySaved, setIsEntrySaved] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -224,85 +299,405 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col justify-start pt-5 sm:pt-10 md:pt-12 px-6 sm:px-12 md:px-16 lg:px-20 pb-12">
-        {activePage === 'Home' && (
-          <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-10 lg:gap-6 animate-in fade-in duration-500">
-            <div className="w-full lg:w-[32%] flex flex-col items-start -translate-y-3 sm:-translate-y-5 lg:-translate-y-7">
-              <div className="flex items-center gap-5 sm:gap-6 mb-8 sm:mb-10">
-                {renderTimeIcon(timeInfo.phase)}
-                <div className="flex flex-col">
-                  <span className="text-slate-500 text-xl sm:text-2xl md:text-3xl font-medium">
-                    {timeInfo.greeting}
-                  </span>
-                  <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[#1a2b49]">
-                    User
-                  </span>
-                </div>
-              </div>
-
-              <div className="relative pl-8 sm:pl-10 pr-4 py-2">
-                <span className="absolute -top-4 sm:-top-6 left-0 text-5xl sm:text-6xl md:text-7xl font-serif text-[#6eafe9]/70 select-none">
-                  &ldquo;
-                </span>
-                <p className="text-2xl sm:text-3xl md:text-4xl text-slate-700 font-normal leading-relaxed tracking-wide inline font-quote">
-                  A small step today is still progress.
-                </p>
-                <span className="inline-block text-5xl sm:text-6xl md:text-7xl font-serif text-[#6eafe9]/70 select-none ml-2 align-middle">
-                  &rdquo;
-                </span>
-              </div>
-            </div>
-
-            <div className="w-full lg:w-[36%] flex flex-col items-center justify-center -translate-y-4 sm:-translate-y-6 lg:-translate-y-8 py-2">
-              <JournalBook onClick={() => setActivePage('Journal')} />
-            </div>
-
-            <div className="w-full lg:w-[32%] flex flex-col items-start lg:pl-6">
-              <span className="text-sm sm:text-base font-medium text-slate-400 mb-2">
-                {formattedDate}
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#1a2b49] mb-3">
-                Ready to write today&apos;s chapter?
-              </h2>
-              <p className="text-base sm:text-lg text-slate-500 leading-relaxed mb-6 max-w-md">
-                Capture your thoughts, reflect on your day, and let your future self be proud.
-              </p>
-              <button
-                type="button"
-                onClick={() => setActivePage('Journal')}
-                className="group inline-flex items-center gap-2.5 px-6 py-3.5 bg-[#6eafe9] hover:bg-[#5b9fe0] text-white font-semibold text-base rounded-2xl shadow-lg shadow-[#6eafe9]/25 hover:shadow-xl hover:shadow-[#6eafe9]/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
-              >
-                <Pencil className="w-5 h-5" />
-                <span>Open Journal</span>
-                <ArrowRight className="w-5 h-5 ml-1 transition-transform group-hover:translate-x-1" />
-              </button>
-            </div>
+      <main className="flex-1 flex flex-col justify-start pt-5 sm:pt-10 md:pt-12 px-6 sm:px-12 md:px-16 lg:px-20 pb-12 overflow-x-hidden">
+        {activePage === 'About' ? (
+          <div className="w-full max-w-3xl mx-auto bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-8 sm:p-12 animate-in fade-in duration-500">
+            <h2 className="text-3xl font-bold text-[#1a2b49] mb-4">About DayBook</h2>
+            <p className="text-lg text-slate-600 leading-relaxed">
+              DayBook is your daily sanctuary for mindful reflection, personal growth, and creative journaling.
+            </p>
           </div>
-        )}
+        ) : (
+          <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-start justify-between gap-8 lg:gap-6 relative">
+            <div
+              className={`transition-[width] duration-700 delay-[260ms] ease-in-out flex flex-col items-start min-w-0 relative -translate-y-3 sm:-translate-y-5 lg:-translate-y-7 ${
+                activePage === 'Journal'
+                  ? 'w-full lg:w-[62%]'
+                  : 'w-full lg:w-[32%]'
+              }`}
+            >
+              <div
+                className={`w-full flex flex-col items-start ${
+                  activePage === 'Home'
+                    ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out delay-[800ms]'
+                    : 'opacity-0 -translate-x-6 absolute pointer-events-none transition-all duration-250 ease-in delay-0'
+                }`}
+              >
+                <div className="flex items-center gap-5 sm:gap-6 mb-8 sm:mb-10 pt-3 sm:pt-4 lg:pt-6">
+                  {renderTimeIcon(timeInfo.phase)}
+                  <div className="flex flex-col">
+                    <span className="text-slate-500 text-xl sm:text-2xl md:text-3xl font-medium">
+                      {timeInfo.greeting}
+                    </span>
+                    <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[#1a2b49]">
+                      User
+                    </span>
+                  </div>
+                </div>
 
-        {activePage === 'Journal' && (
-          <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row items-start justify-between gap-12 py-6 animate-in fade-in duration-500">
-            <div className="flex-1 w-full bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-8 sm:p-12">
-              <div className="flex items-center justify-between pb-6 border-b border-slate-100">
-                <div>
-                  <span className="text-xs sm:text-sm font-semibold tracking-wider text-[#6eafe9] uppercase">
-                    Today&apos;s Entry
+                <div className="relative pl-8 sm:pl-10 pr-4 py-2 mt-24 sm:mt-28 md:mt-32 lg:mt-36">
+                  <span className="absolute -top-4 sm:-top-6 left-0 text-5xl sm:text-6xl md:text-7xl font-serif text-[#6eafe9]/70 select-none">
+                    &ldquo;
                   </span>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-[#1a2b49] mt-1">
-                    {formattedDate}
-                  </h2>
+                  <p className="text-2xl sm:text-3xl md:text-4xl text-slate-700 font-normal leading-relaxed tracking-wide inline font-quote">
+                    A small step today is still progress.
+                  </p>
+                  <span className="inline-block text-5xl sm:text-6xl md:text-7xl font-serif text-[#6eafe9]/70 select-none ml-2 align-middle">
+                    &rdquo;
+                  </span>
                 </div>
               </div>
-              <div className="py-6">
-                <textarea
-                  placeholder="What's on your mind today? Write freely..."
-                  className="w-full h-64 p-4 text-base sm:text-lg text-slate-700 bg-[#FAF9F5]/50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#6eafe9]/50 resize-none transition-all placeholder:text-slate-400"
-                />
+
+              <div
+                className={`w-full ${
+                  activePage === 'Journal'
+                    ? 'opacity-100 translate-x-0 relative pointer-events-auto scale-100 transition-all duration-500 ease-out delay-[800ms]'
+                    : 'opacity-0 -translate-x-6 absolute pointer-events-none scale-98 transition-all duration-250 ease-in delay-0'
+                }`}
+              >
+                <div className="w-full flex flex-col md:flex-row gap-4 sm:gap-5 lg:gap-6 items-start">
+                  <div className="w-full md:w-20 lg:w-22 bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 py-3 sm:py-4 px-1.5 sm:px-2 flex flex-row md:flex-col items-center justify-around md:justify-start gap-1 sm:gap-2.5 md:gap-3 flex-shrink-0 overflow-x-auto scrollbar-none">
+                    {sidebarItems.map(({ id, label, icon: Icon }) => {
+                      const isActive = activeSidebarTab === id
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setActiveSidebarTab(id)}
+                          className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
+                            isActive
+                              ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-sm font-semibold'
+                              : 'text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium'
+                          }`}
+                        >
+                          <Icon
+                            className={`w-5.5 h-5.5 transition-transform duration-200 group-hover:scale-110 ${
+                              isActive ? 'text-[#4f8ee6]' : 'text-slate-400 group-hover:text-[#4f8ee6]'
+                            }`}
+                          />
+                          <span className="text-[11px] tracking-tight">{label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="flex-1 w-full bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-6 sm:p-8 min-h-[460px] flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
+                        <div>
+                          <span className="text-xs sm:text-sm font-semibold tracking-wider text-[#6eafe9] uppercase">
+                            DayBook
+                          </span>
+                          <h2 className="text-2xl sm:text-3xl font-bold text-[#1a2b49] mt-0.5">
+                            {activeSidebarTab}
+                          </h2>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActivePage('Home')}
+                          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-[#6eafe9] transition-colors cursor-pointer group"
+                        >
+                          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                          <span>Home</span>
+                        </button>
+                      </div>
+
+                      {activeSidebarTab === 'Analytics' && (
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                            <div className="bg-[#FAF9F5] p-3.5 sm:p-4 rounded-2xl border border-slate-100">
+                              <span className="text-xs font-medium text-slate-400">Streak</span>
+                              <p className="text-xl sm:text-2xl font-bold text-[#1a2b49] mt-1">7 Days</p>
+                              <span className="text-[11px] text-emerald-600 font-medium">+2 this week</span>
+                            </div>
+                            <div className="bg-[#FAF9F5] p-3.5 sm:p-4 rounded-2xl border border-slate-100">
+                              <span className="text-xs font-medium text-slate-400">Entries</span>
+                              <p className="text-xl sm:text-2xl font-bold text-[#1a2b49] mt-1">24</p>
+                              <span className="text-[11px] text-slate-400 font-medium">This month</span>
+                            </div>
+                            <div className="bg-[#FAF9F5] p-3.5 sm:p-4 rounded-2xl border border-slate-100">
+                              <span className="text-xs font-medium text-slate-400">Words</span>
+                              <p className="text-xl sm:text-2xl font-bold text-[#1a2b49] mt-1">8,450</p>
+                              <span className="text-[11px] text-[#6eafe9] font-medium">Avg 350 / entry</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">
+                              Weekly Activity
+                            </span>
+                            <div className="flex items-end justify-between gap-2 h-28 pt-4 pb-1 px-2">
+                              {[
+                                { day: 'Mon', h: '65%' },
+                                { day: 'Tue', h: '85%' },
+                                { day: 'Wed', h: '45%' },
+                                { day: 'Thu', h: '95%' },
+                                { day: 'Fri', h: '80%' },
+                                { day: 'Sat', h: '60%' },
+                                { day: 'Sun', h: '70%' },
+                              ].map(({ day, h }) => (
+                                <div key={day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                                  <div
+                                    className="w-full max-w-[28px] bg-gradient-to-t from-[#6eafe9] to-[#99cdfb] rounded-t-lg transition-all hover:opacity-90"
+                                    style={{ height: h }}
+                                  />
+                                  <span className="text-[11px] text-slate-400 font-medium">{day}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {activeSidebarTab === 'Book' && (
+                        <div className="space-y-4">
+                          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF9F5] border border-slate-100">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-[#6eafe9]/15 flex items-center justify-center text-[#6eafe9]">
+                                  <BookNavIcon className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-bold text-[#1a2b49]">Current Book</h4>
+                                  <span className="text-xs text-slate-400">Volume III: Autumn Stillness</span>
+                                </div>
+                              </div>
+                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white text-[#6eafe9] border border-[#6eafe9]/30 shadow-xs">
+                                Page 48 of 120
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-200/70 rounded-full overflow-hidden">
+                              <div className="h-full bg-[#6eafe9] rounded-full" style={{ width: '40%' }} />
+                            </div>
+                          </div>
+
+                          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF9F5] border border-slate-100 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <label htmlFor="book-quick-reflection" className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                                Today&apos;s Reflection
+                              </label>
+                              <span className="text-xs text-slate-400 font-medium">
+                                {bookEntryText.trim().split(/\s+/).filter(Boolean).length} words
+                              </span>
+                            </div>
+                            <textarea
+                              id="book-quick-reflection"
+                              value={bookEntryText}
+                              onChange={(e) => setBookEntryText(e.target.value)}
+                              placeholder="What made today meaningful? Note down your thoughts..."
+                              className="w-full h-28 p-3 rounded-xl bg-white border border-slate-200/80 text-sm text-[#1a2b49] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6eafe9]/40 resize-none font-sans leading-relaxed"
+                            />
+                            <div className="flex items-center justify-between pt-1">
+                              <div className="flex items-center gap-1.5">
+                                {(['Peaceful', 'Grateful', 'Focused', 'Inspired'] as const).map((mood) => (
+                                  <button
+                                    key={mood}
+                                    type="button"
+                                    onClick={() => setSelectedMood(selectedMood === mood ? null : mood)}
+                                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                                      selectedMood === mood
+                                        ? 'bg-[#6eafe9] text-white border-[#6eafe9] font-medium shadow-xs'
+                                        : 'bg-white text-slate-500 border-slate-200/70 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    {mood}
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsEntrySaved(true)
+                                  setTimeout(() => setIsEntrySaved(false), 2000)
+                                }}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#6eafe9] hover:bg-[#5b9fe0] text-white transition-all cursor-pointer shadow-xs"
+                              >
+                                {isEntrySaved ? 'Saved!' : 'Save Entry'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {activeSidebarTab === 'Calendar' && (
+                        <div className="space-y-4">
+                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
+                            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                                <span key={d} className="text-xs font-semibold text-slate-400 py-1">{d}</span>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-7 gap-1 text-center">
+                              {Array.from({ length: 31 }, (_, i) => {
+                                const day = i + 1
+                                const isToday = day === 2
+                                const hasEntry = [1, 2, 4, 7, 8, 11, 14, 15, 18, 20, 22, 25, 28, 29].includes(day)
+                                return (
+                                  <div
+                                    key={day}
+                                    className={`py-2 text-xs sm:text-sm rounded-xl font-medium relative flex flex-col items-center justify-center transition-colors ${
+                                      isToday
+                                        ? 'bg-[#6eafe9] text-white font-bold shadow-sm'
+                                        : 'text-slate-600 hover:bg-slate-200/50'
+                                    }`}
+                                  >
+                                    <span>{day}</span>
+                                    {hasEntry && !isToday && (
+                                      <span className="w-1 h-1 rounded-full bg-[#6eafe9] mt-0.5" />
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                            <span>Highlighted: Friday, October 2, 2026</span>
+                            <span className="text-[#6eafe9] font-medium">14 Entries Recorded</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {activeSidebarTab === 'Goals' && (
+                        <div className="space-y-4">
+                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-semibold text-[#1a2b49]">Daily Evening Reflection</span>
+                              <span className="text-xs font-bold text-[#6eafe9]">6 / 7 Days</span>
+                            </div>
+                            <div className="w-full h-2.5 bg-slate-200/70 rounded-full overflow-hidden">
+                              <div className="h-full bg-[#6eafe9] rounded-full" style={{ width: '86%' }} />
+                            </div>
+                            <span className="text-xs text-slate-400 mt-2 block">1 day left to complete this week</span>
+                          </div>
+
+                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-semibold text-[#1a2b49]">Weekly Word Target</span>
+                              <span className="text-xs font-bold text-[#6eafe9]">840 / 1,000</span>
+                            </div>
+                            <div className="w-full h-2.5 bg-slate-200/70 rounded-full overflow-hidden">
+                              <div className="h-full bg-[#6eafe9] rounded-full" style={{ width: '84%' }} />
+                            </div>
+                            <span className="text-xs text-slate-400 mt-2 block">160 words away from weekly target</span>
+                          </div>
+
+                          <div className="flex items-center gap-3 p-3.5 bg-emerald-50/60 border border-emerald-200/60 rounded-2xl text-emerald-800">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                            <span className="text-xs sm:text-sm font-medium">Milestone achieved: 30 consecutive days with an entry</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {activeSidebarTab === 'Library' && (
+                        <div className="space-y-3">
+                          {[
+                            { title: 'Volume III: Autumn Stillness', period: 'Sep - Nov 2026', count: '24 entries', active: true },
+                            { title: 'Volume II: Summer Solstice', period: 'Jun - Aug 2026', count: '56 entries', active: false },
+                            { title: 'Volume I: Spring Awakening', period: 'Mar - May 2026', count: '42 entries', active: false },
+                          ].map((vol) => (
+                            <div
+                              key={vol.title}
+                              className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                                vol.active
+                                  ? 'bg-[#eff6fc]/60 border-[#6eafe9]/40 shadow-sm'
+                                  : 'bg-[#FAF9F5] border-slate-100 hover:border-slate-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Bookmark className={`w-5 h-5 ${vol.active ? 'text-[#6eafe9]' : 'text-slate-400'}`} />
+                                <div>
+                                  <h4 className="text-sm font-semibold text-[#1a2b49]">{vol.title}</h4>
+                                  <span className="text-xs text-slate-400">{vol.period}</span>
+                                </div>
+                              </div>
+                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white text-slate-600 border border-slate-200/60 shadow-xs">
+                                {vol.count}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {activeSidebarTab === 'Settings' && (
+                        <div className="space-y-3">
+                          <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <h4 className="text-sm font-semibold text-[#1a2b49]">Color Palette</h4>
+                              <p className="text-xs text-slate-400">Warm Cream and Blue Canvas</p>
+                            </div>
+                            <span className="text-xs font-semibold text-[#6eafe9]">Active</span>
+                          </div>
+                          <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <h4 className="text-sm font-semibold text-[#1a2b49]">Handwritten Font</h4>
+                              <p className="text-xs text-slate-400">Cedarville Cursive for daily quotes</p>
+                            </div>
+                            <span className="text-xs font-semibold text-[#6eafe9]">Active</span>
+                          </div>
+                          <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <h4 className="text-sm font-semibold text-[#1a2b49]">Evening Reminder</h4>
+                              <p className="text-xs text-slate-400">Daily gentle prompt at 8:30 PM</p>
+                            </div>
+                            <span className="text-xs font-semibold text-emerald-600">Enabled</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="hidden lg:flex flex-col items-center justify-center lg:w-80 flex-shrink-0 transition-transform duration-700 ease-out">
-              <JournalBook />
+            <div
+              className={`transition-[width] duration-700 delay-[260ms] ease-in-out flex flex-col items-center justify-start flex-shrink-0 z-10 -translate-y-4 sm:-translate-y-6 lg:-translate-y-8 py-2 ${
+                activePage === 'Journal'
+                  ? 'hidden lg:flex lg:w-[35%]'
+                  : 'flex w-full lg:w-[36%]'
+              }`}
+            >
+              <JournalBook
+                onClick={() => {
+                  if (activePage === 'Home') {
+                    setActivePage('Journal')
+                  }
+                }}
+              />
+            </div>
+
+            <div
+              className={`transition-[width] duration-700 delay-[260ms] ease-in-out flex flex-col items-start min-w-0 ${
+                activePage === 'Journal'
+                  ? 'w-0 pointer-events-none overflow-hidden lg:w-0 lg:p-0'
+                  : 'w-full lg:w-[32%] pointer-events-auto lg:pl-6'
+              }`}
+            >
+              <div
+                className={`w-full flex flex-col items-start pt-6 sm:pt-10 ${
+                  activePage === 'Home'
+                    ? 'opacity-100 translate-x-0 transition-all duration-500 ease-out delay-[800ms]'
+                    : 'opacity-0 translate-x-6 transition-all duration-250 ease-in delay-0 pointer-events-none'
+                }`}
+              >
+                <span className="text-sm sm:text-base font-medium text-slate-400 mb-2">
+                  {formattedDate}
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#1a2b49] mb-3">
+                  Ready to write today&apos;s chapter?
+                </h2>
+                <p className="text-base sm:text-lg text-slate-500 leading-relaxed mb-6 max-w-md">
+                  Capture your thoughts, reflect on your day, and let your future self be proud.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActivePage('Journal')}
+                  className="group inline-flex items-center gap-2.5 px-6 py-3.5 bg-[#6eafe9] hover:bg-[#5b9fe0] text-white font-semibold text-base rounded-2xl shadow-lg shadow-[#6eafe9]/25 hover:shadow-xl hover:shadow-[#6eafe9]/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+                >
+                  <Pencil className="w-5 h-5" />
+                  <span>Open Journal</span>
+                  <ArrowRight className="w-5 h-5 ml-1 transition-transform group-hover:translate-x-1" />
+                </button>
+              </div>
             </div>
           </div>
         )}
