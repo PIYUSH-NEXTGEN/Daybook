@@ -418,7 +418,7 @@ export function OpenJournalSpread({
       className={`relative w-full max-w-[600px] sm:max-w-[680px] md:max-w-[760px] lg:max-w-[800px] h-auto min-h-[560px] sm:h-[465px] sm:min-h-0 md:h-[515px] lg:h-[545px] rounded-[22px] sm:rounded-[26px] bg-[#8dc0f8] p-1.5 sm:p-2 shadow-[2px_6px_20px_rgba(20,45,80,0.22)] border border-white/40 select-none ${className}`}
     >
       <div className="relative w-full h-full flex flex-col gap-2 md:gap-0 md:flex-row rounded-[18px] sm:rounded-[22px] overflow-visible md:overflow-hidden bg-transparent shadow-sm scrollbar-none">
-        <div className="flex-1 min-h-0 md:h-full bg-[#FAF9F5] rounded-[18px] md:rounded-t-none md:rounded-l-[20px] md:rounded-r-none border-r-0 md:border-r border-slate-200/60 p-3.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_-4px_0_8px_rgba(0,0,0,0.02)] md:overflow-hidden">
+        <div className="flex-1 min-h-0 md:h-full bg-[#FAF9F5] rounded-[18px] md:rounded-t-none md:rounded-l-[20px] md:rounded-r-none border-r-0 md:border-r border-slate-200/60 p-3.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_0_-10px_12px_-8px_rgba(15,30,55,0.12)] md:shadow-[inset_-4px_0_8px_rgba(0,0,0,0.02)] md:overflow-hidden">
           <div className="space-y-2 sm:space-y-2.5 flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2 relative" ref={weatherDropdownRef}>
@@ -679,13 +679,13 @@ export function OpenJournalSpread({
           </div>
         </div>
 
-        <div className="hidden md:flex w-4 sm:w-5 bg-[#a2cbe9] relative z-30 flex-col justify-between py-8 items-center flex-shrink-0">
+        <div className="flex w-full h-4 sm:h-5 md:h-full md:w-5 bg-[#a2cbe9] relative z-30 flex-row md:flex-col justify-between items-center px-6 sm:px-10 md:px-0 py-0 md:py-8 flex-shrink-0">
           <div className="w-4 sm:w-5 h-2 rounded-full bg-gradient-to-r from-slate-400 via-slate-100 to-slate-400 shadow-xs border border-slate-400/80" />
           <div className="w-4 sm:w-5 h-2 rounded-full bg-gradient-to-r from-slate-400 via-slate-100 to-slate-400 shadow-xs border border-slate-400/80" />
           <div className="w-4 sm:w-5 h-2 rounded-full bg-gradient-to-r from-slate-400 via-slate-100 to-slate-400 shadow-xs border border-slate-400/80" />
         </div>
 
-        <div className="flex-1 min-h-0 md:h-full bg-[#FAF9F5] rounded-[18px] md:rounded-b-none md:rounded-r-[20px] md:rounded-l-none border-l-0 md:border-l border-slate-200/60 p-3.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_4px_0_8px_rgba(0,0,0,0.02)] md:overflow-hidden">
+        <div className="flex-1 min-h-0 md:h-full bg-[#FAF9F5] rounded-[18px] md:rounded-b-none md:rounded-r-[20px] md:rounded-l-none border-l-0 md:border-l border-slate-200/60 p-3.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_0_10px_12px_-8px_rgba(15,30,55,0.12)] md:shadow-[inset_4px_0_8px_rgba(0,0,0,0.02)] md:overflow-hidden">
           <div className="space-y-2 sm:space-y-2.5 flex-1 flex flex-col min-h-0">
             <div className="bg-gradient-to-br from-white/95 via-white/90 to-slate-50/80 rounded-xl p-2 sm:p-2.5 shadow-2xs border border-slate-200/60 backdrop-blur-xs flex-shrink-0">
               <div className="flex items-center justify-between pb-1 border-b border-slate-100">

@@ -126,7 +126,7 @@ export function JournalToolbar({
       ref={toolbarRef}
       className={`w-full md:w-20 lg:w-22 bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 py-2 md:py-4 px-2 md:px-2 grid grid-cols-4 md:flex md:flex-col items-center justify-items-center md:justify-start gap-x-1 gap-y-1.5 sm:gap-2 flex-shrink-0 relative select-none mt-1 mb-2 max-lg:[&>*]:min-w-0 ${className}`}
     >
-      <div className="relative w-full">
+      <div className="w-full md:relative">
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -143,7 +143,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'font' && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-2.5 min-w-[170px] animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-2.5 min-w-[170px] animate-in fade-in zoom-in-95 duration-150">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 block">
               Font Family
             </span>
@@ -176,7 +176,7 @@ export function JournalToolbar({
         )}
       </div>
 
-      <div className="relative w-full">
+      <div className="w-full md:relative">
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -193,7 +193,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'size' && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[180px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[180px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               Font Size
             </span>
@@ -261,7 +261,7 @@ export function JournalToolbar({
         )}
       </div>
 
-      <div className="relative w-full">
+      <div className="w-full md:relative">
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -284,7 +284,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'color' && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[190px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[190px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               Ink Color
             </span>
