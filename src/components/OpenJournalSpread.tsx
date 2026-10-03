@@ -415,10 +415,10 @@ export function OpenJournalSpread({
 
   return (
     <div
-      className={`relative w-full max-w-[600px] sm:max-w-[680px] md:max-w-[760px] lg:max-w-[800px] h-[410px] sm:h-[465px] md:h-[515px] lg:h-[545px] rounded-[22px] sm:rounded-[26px] bg-[#8dc0f8] p-1.5 sm:p-2 shadow-[2px_6px_20px_rgba(20,45,80,0.22)] border border-white/40 select-none ${className}`}
+      className={`relative w-full max-w-[600px] sm:max-w-[680px] md:max-w-[760px] lg:max-w-[800px] h-auto min-h-[560px] sm:h-[465px] sm:min-h-0 md:h-[515px] lg:h-[545px] rounded-[22px] sm:rounded-[26px] bg-[#8dc0f8] p-1.5 sm:p-2 shadow-[2px_6px_20px_rgba(20,45,80,0.22)] border border-white/40 select-none ${className}`}
     >
-      <div className="relative w-full h-full flex flex-col md:flex-row rounded-[18px] sm:rounded-[22px] overflow-hidden bg-transparent shadow-sm">
-        <div className="flex-1 h-full bg-[#FAF9F5] rounded-t-[18px] md:rounded-t-none md:rounded-l-[20px] border-r-0 md:border-r border-slate-200/60 p-2.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_-4px_0_8px_rgba(0,0,0,0.02)] overflow-hidden">
+      <div className="relative w-full h-full flex flex-col gap-2 md:gap-0 md:flex-row rounded-[18px] sm:rounded-[22px] overflow-visible md:overflow-hidden bg-transparent shadow-sm scrollbar-none">
+        <div className="flex-1 min-h-0 md:h-full bg-[#FAF9F5] rounded-[18px] md:rounded-t-none md:rounded-l-[20px] md:rounded-r-none border-r-0 md:border-r border-slate-200/60 p-3.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_-4px_0_8px_rgba(0,0,0,0.02)] md:overflow-hidden">
           <div className="space-y-2 sm:space-y-2.5 flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2 relative" ref={weatherDropdownRef}>
@@ -474,9 +474,9 @@ export function OpenJournalSpread({
 
             </div>
 
-            <div className="flex flex-col items-center flex-shrink-0">
-              <div className="relative group/photo w-36 sm:w-40 md:w-44 lg:w-48 bg-white rounded-2xl p-2 pb-2.5 shadow-sm border border-slate-200/60 transition-transform duration-200 hover:-rotate-1">
-                <div className="relative w-full h-20 sm:h-24 md:h-26 lg:h-28 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/40">
+            <div className="flex flex-col items-center flex-shrink-0 max-md:w-full">
+              <div className="relative group/photo w-full max-w-[200px] sm:max-w-none sm:w-40 md:w-44 lg:w-48 bg-white rounded-2xl p-1.5 pb-2 sm:p-2 sm:pb-2.5 shadow-sm border border-slate-200/60 transition-transform duration-200 hover:-rotate-1">
+                <div className="relative w-full h-16 sm:h-24 md:h-26 lg:h-28 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/40">
                   <img
                     src={photoUrl}
                     alt="Journal moment"
@@ -609,7 +609,7 @@ export function OpenJournalSpread({
                 </div>
               )}
 
-              <div className="space-y-1 overflow-y-auto pr-0.5 scrollbar-none flex-1 min-h-[50px] max-h-[120px] sm:max-h-[145px] md:max-h-[165px]">
+              <div className="space-y-1 overflow-y-auto pr-0.5 scrollbar-none flex-1 min-h-[80px] max-h-[180px] sm:min-h-[90px] sm:max-h-[145px] md:max-h-[165px]">
                 {goals.length === 0 && !isAddingGoal && (
                   <button
                     type="button"
@@ -685,7 +685,7 @@ export function OpenJournalSpread({
           <div className="w-4 sm:w-5 h-2 rounded-full bg-gradient-to-r from-slate-400 via-slate-100 to-slate-400 shadow-xs border border-slate-400/80" />
         </div>
 
-        <div className="flex-1 h-full bg-[#FAF9F5] rounded-b-[18px] md:rounded-b-none md:rounded-r-[20px] border-l-0 md:border-l border-slate-200/60 p-2.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_4px_0_8px_rgba(0,0,0,0.02)] overflow-hidden">
+        <div className="flex-1 min-h-0 md:h-full bg-[#FAF9F5] rounded-[18px] md:rounded-b-none md:rounded-r-[20px] md:rounded-l-none border-l-0 md:border-l border-slate-200/60 p-3.5 sm:p-3.5 flex flex-col justify-between relative shadow-[inset_4px_0_8px_rgba(0,0,0,0.02)] md:overflow-hidden">
           <div className="space-y-2 sm:space-y-2.5 flex-1 flex flex-col min-h-0">
             <div className="bg-gradient-to-br from-white/95 via-white/90 to-slate-50/80 rounded-xl p-2 sm:p-2.5 shadow-2xs border border-slate-200/60 backdrop-blur-xs flex-shrink-0">
               <div className="flex items-center justify-between pb-1 border-b border-slate-100">
@@ -737,7 +737,7 @@ export function OpenJournalSpread({
                 ✍️ Write your thoughts, mood, and reflections:
               </span>
 
-              <div className="relative w-full flex-1 rounded-xl bg-white/70 border border-slate-200/50 p-2 sm:p-2.5 overflow-hidden flex flex-col">
+              <div className="relative w-full flex-1 min-h-[150px] md:min-h-0 rounded-xl bg-white/70 border border-slate-200/50 p-2 sm:p-2.5 overflow-hidden flex flex-col">
                 {(!entryText || entryText.trim() === '') && (
                   <div className="absolute top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 text-xs sm:text-[13px] text-slate-400 pointer-events-none italic leading-[24px] select-none">
                     What happened today? How did the day go? What goals could be done and not done...

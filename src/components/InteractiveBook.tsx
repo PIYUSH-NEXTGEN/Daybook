@@ -69,7 +69,7 @@ export function InteractiveBook({
 
   if (stage === 'open') {
     return (
-      <div className={`w-full flex justify-center animate-in fade-in duration-300 ${className}`}>
+      <div className={`w-full max-w-full flex justify-center overflow-x-clip px-1 sm:px-0 animate-in fade-in zoom-in-[0.98] duration-500 ease-out ${className}`}>
         <OpenJournalSpread onClose={onClose} textStyle={textStyle} />
       </div>
     )
@@ -82,11 +82,9 @@ export function InteractiveBook({
           onOpen()
         }
       }}
-      style={{
-        transform: isShifted ? 'translateX(50%)' : 'translateX(0)',
-        transition: 'transform 700ms cubic-bezier(0.25, 1, 0.5, 1)'
-      }}
-      className={`relative select-none ${
+      className={`relative select-none touch-manipulation max-w-full transition-transform duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] ${
+        isShifted ? 'translate-x-0 lg:translate-x-1/2' : 'translate-x-0'
+      } ${
         !isOpen ? 'cursor-pointer group' : ''
       } ${className}`}
     >
@@ -121,7 +119,7 @@ export function InteractiveBook({
       </div>
 
       <div
-        className="relative w-[300px] sm:w-[340px] md:w-[380px] lg:w-[400px] h-[410px] sm:h-[465px] md:h-[515px] lg:h-[545px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] shadow-[2px_4px_12px_rgba(15,30,55,0.26),0_20px_40px_-15px_rgba(20,45,80,0.28)] z-10"
+        className="relative w-[min(74vw,280px)] sm:w-[340px] md:w-[380px] lg:w-[400px] h-[340px] sm:h-[465px] md:h-[515px] lg:h-[545px] rounded-tl-[24px] rounded-bl-[20px] rounded-tr-[24px] rounded-br-[24px] shadow-[2px_4px_12px_rgba(15,30,55,0.26),0_20px_40px_-15px_rgba(20,45,80,0.28)] z-10"
         style={{ perspective: '2200px' }}
       >
         <div
@@ -157,7 +155,7 @@ export function InteractiveBook({
 
         <div
           className={`absolute left-2 sm:left-2.5 right-0 top-1 bottom-1 origin-left transition-transform ${
-            stage === 'closing' ? 'duration-350 ease-in-out' : 'duration-600 ease-out'
+            stage === 'closing' ? 'duration-350 ease-in-out' : 'duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]'
           } z-2 pointer-events-none`}
           style={{
             transformStyle: 'preserve-3d',
