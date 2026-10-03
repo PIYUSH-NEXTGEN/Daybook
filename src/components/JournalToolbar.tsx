@@ -143,7 +143,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'font' && (
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-2.5 min-w-[170px] animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-2.5 min-w-[170px] animate-in fade-in zoom-in-95 duration-150">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 block">
               Font Family
             </span>
@@ -193,7 +193,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'size' && (
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[180px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
+          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[180px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               Font Size
             </span>
@@ -284,7 +284,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'color' && (
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[190px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
+          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[190px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               Ink Color
             </span>

@@ -483,7 +483,9 @@ function App() {
               }`}
             >
               <div
-                className={`max-lg:contents lg:flex lg:flex-col lg:items-start lg:w-full order-1 lg:order-none ${
+                className={`lg:flex lg:flex-col lg:items-start lg:w-full order-1 lg:order-none ${
+                  activePage === 'Journal' ? 'max-lg:hidden' : 'max-lg:contents'
+                } ${
                   homeTextState === 'visible' && activePage === 'Home'
                     ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out'
                     : homeTextState === 'fading-out'
@@ -777,7 +779,7 @@ function App() {
               className={`transition-opacity duration-500 ease-out max-lg:contents lg:flex lg:flex-col lg:items-start lg:min-w-0 lg:max-w-full ${
                 activePage === 'Journal'
                   ? activeSidebarTab === 'Book' && !isClosingBook
-                    ? 'flex w-full lg:w-22 flex-shrink-0 pointer-events-auto lg:-translate-y-7 relative z-20 order-1 lg:order-none mt-2 lg:mt-0'
+                    ? 'flex w-full lg:w-22 flex-shrink-0 pointer-events-auto lg:-translate-y-7 relative z-20 order-3 lg:order-none mt-2 lg:mt-0'
                     : isClosingBook
                       ? 'w-0 lg:w-22 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0 flex-shrink-0'
                       : 'w-0 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0'
@@ -817,7 +819,7 @@ function App() {
 
               {activePage === 'Journal' && (
                 <div
-                  className={`w-full flex justify-center transition-opacity duration-500 ease-out py-1 order-1 lg:order-none ${
+                  className={`w-full flex justify-center transition-opacity duration-500 ease-out py-1 order-3 lg:order-none ${
                     activeSidebarTab === 'Book' && !isClosingBook
                       ? 'opacity-100 pointer-events-auto'
                       : 'opacity-0 pointer-events-none hidden'
