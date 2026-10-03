@@ -11,6 +11,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/ollama/, ''),
       },
+      '/api': {
+        target: 'http:' + String.fromCharCode(47, 47) + '127.0.0.1:3001',
+        changeOrigin: true,
+      },
     },
   },
 })

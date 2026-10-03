@@ -17,6 +17,11 @@ import { LibraryView } from './components/LibraryView'
 import { SettingsView } from './components/SettingsView'
 import { JournalToolbar } from './components/JournalToolbar'
 import { defaultTextStyle, type JournalTextStyle } from './components/journalTextStyle'
+import { FirstRunRegistration } from './components/FirstRunRegistration'
+import { OnboardingView } from './components/OnboardingView'
+import { getCurrentUser, getCurrentProfile, type LocalUser, type UserProfile } from './lib/api'
+
+const ACTIVE_USER_ID_KEY = 'daybook_active_user_id'
 
 const navItems = ['Home', 'Journal', 'About'] as const
 type NavItem = (typeof navItems)[number]
@@ -163,6 +168,11 @@ function App() {
   const [isClosingBook, setIsClosingBook] = useState(false)
   const [isOpeningFromAbout, setIsOpeningFromAbout] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [currentUser, setCurrentUser] = useState<LocalUser | null>(null)
+  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null)
+  const [showRegistration, setShowRegistration] = useState(false)
+  const [isOnboardingActive, setIsOnboardingActive] = useState(false)
+  const [isCheckingUser, setIsCheckingUser] = useState(true)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [homeTextState, setHomeTextState] = useState<'visible' | 'fading-out' | 'hidden' | 'entering'>('visible')
   const [textStyle, setTextStyle] = useState<JournalTextStyle>(() => {
@@ -212,6 +222,16 @@ function App() {
   }
 
   function handleOpenJournal() {
+    if (!currentUser) {
+      setShowRegistration(true)
+      return
+    }
+
+    if (currentProfile ? !currentProfile.onboardingCompleted : true) {
+      setIsOnboardingActive(true)
+      return
+    }
+
     if (activePage === 'Journal' && activeSidebarTab === 'Book' && !isOpeningFromAbout) return
     if (homeTextState === 'fading-out') return
 
@@ -242,6 +262,17 @@ function App() {
   }
 
   function handleNavigatePage(page: NavItem) {
+    if (page === 'Journal') {
+      if (!currentUser) {
+        setShowRegistration(true)
+        return
+      }
+      if (currentProfile ? !currentProfile.onboardingCompleted : true) {
+        setIsOnboardingActive(true)
+        return
+      }
+    }
+
     if (page === activePage && !isClosingBook) {
       if (page === 'Journal' && activeSidebarTab !== 'Book') {
         setActiveSidebarTab('Book')
@@ -346,6 +377,119 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+
+    getCurrentUser()
+      .then(async (user) => {
+        if (cancelled) return
+        if (user) {
+          try {
+            localStorage.setItem(ACTIVE_USER_ID_KEY, user.id)
+          } catch (e) {
+            void e
+          }
+          setCurrentUser(user)
+          try {
+            const profile = await getCurrentProfile()
+            if (!cancelled) {
+              setCurrentProfile(profile)
+            }
+          } catch (e) {
+            void e
+          }
+        } else {
+          try {
+            localStorage.removeItem(ACTIVE_USER_ID_KEY)
+          } catch (e) {
+            void e
+          }
+          setCurrentUser(null)
+          setCurrentProfile(null)
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCurrentUser(null)
+        setCurrentProfile(null)
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingUser(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function handleUserCreated(user: LocalUser) {
+    try {
+      localStorage.setItem(ACTIVE_USER_ID_KEY, user.id)
+    } catch (e) {
+      void e
+    }
+    setCurrentUser(user)
+    setShowRegistration(false)
+    setActivePage('Home')
+    setActiveSidebarTab('Book')
+    setHomeTextState('visible')
+    getCurrentProfile()
+      .then((profile) => {
+        setCurrentProfile(profile)
+      })
+      .catch(() => {
+        setCurrentProfile(null)
+      })
+  }
+
+  function handleCompleteOnboarding(profile: UserProfile) {
+    setCurrentProfile(profile)
+    setIsOnboardingActive(false)
+    setActivePage('Journal')
+    setActiveSidebarTab('Book')
+    setHomeTextState('hidden')
+  }
+
+  if (isCheckingUser) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F5] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
+          <img
+            src={logo}
+            alt="DayBook logo"
+            className="h-16 w-auto object-contain select-none animate-pulse"
+          />
+          <span className="text-sm font-medium text-slate-400">
+            Opening your DayBook...
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  if (showRegistration && !currentUser) {
+    return (
+      <FirstRunRegistration
+        onCreated={handleUserCreated}
+        onCancel={() => setShowRegistration(false)}
+      />
+    )
+  }
+
+  if (isOnboardingActive && currentUser) {
+    return (
+      <OnboardingView
+        initialProfile={currentProfile}
+        onComplete={handleCompleteOnboarding}
+        onCancel={() => {
+          setIsOnboardingActive(false)
+          setActivePage('Home')
+          setHomeTextState('visible')
+        }}
+      />
+    )
+  }
+
   return (
     <div className={`bg-[#FAF9F5] text-[#464e5c] flex flex-col ${
       activePage === 'Home'
@@ -422,7 +566,7 @@ function App() {
               </svg>
             </div>
             <span className="font-semibold text-sm sm:text-base text-[#464e5c] group-hover:text-slate-900">
-              User
+              {currentUser?.displayName || 'User'}
             </span>
             <ChevronDown
               className={`w-4 h-4 text-[#464e5c] transition-transform duration-200 ${
@@ -445,7 +589,7 @@ function App() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="font-bold text-slate-800 text-sm truncate">
-                    User
+                    {currentUser?.displayName || 'User'}
                   </h3>
                 </div>
               </div>
@@ -508,7 +652,7 @@ function App() {
                       {timeInfo.greeting}
                     </span>
                     <span className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[#1a2b49]">
-                      User
+                      {currentUser?.displayName || 'User'}
                     </span>
                   </div>
                 </div>
