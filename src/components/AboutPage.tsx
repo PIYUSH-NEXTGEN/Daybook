@@ -1,3 +1,5 @@
+import hacktoberfestImg from '../assets/images/hacktoberfest.webp'
+
 interface AboutPageProps {
   onStartWriting?: () => void
 }
@@ -70,6 +72,15 @@ export function AboutPage({ onStartWriting }: AboutPageProps) {
           >
             Open Source &amp; Hacktoberfest
           </h2>
+
+          <div className="my-6 sm:my-8 overflow-hidden rounded-2xl border border-slate-200/80 shadow-md">
+            <img
+              src={hacktoberfestImg}
+              alt="Hacktoberfest"
+              className="w-full h-auto object-cover select-none"
+              loading="lazy"
+            />
+          </div>
 
           <div className="space-y-5 sm:space-y-6">
             <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">

@@ -468,21 +468,21 @@ function App() {
         </div>
       </header>
 
-      <main className={`flex-1 min-h-0 flex flex-col px-3 sm:px-12 md:px-16 lg:px-20 overflow-x-clip w-full max-w-full ${
+      <main className={`flex-1 flex flex-col px-6 sm:px-12 md:px-16 lg:px-20 overflow-x-hidden ${
         activePage === 'About'
           ? 'justify-start py-6 sm:py-10 md:py-14'
           : activePage === 'Journal' && activeSidebarTab === 'Book'
-            ? 'justify-start py-2 sm:py-3 lg:py-4'
+            ? 'justify-center py-2 sm:py-3 lg:py-4'
             : activePage === 'Home'
-              ? 'justify-start py-1 sm:py-3 lg:py-4'
+              ? 'justify-center py-2 sm:py-3 lg:py-4'
               : 'justify-center py-4 sm:py-6 md:py-8'
       }`}>
         {activePage === 'About' ? (
           <AboutPage onStartWriting={handleOpenJournal} />
         ) : (
-          <div className="w-full max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center lg:items-start justify-between gap-5 sm:gap-6 lg:gap-8 relative max-w-full overflow-x-clip max-lg:min-h-0">
+          <div className="w-full max-w-[1440px] mx-auto flex flex-col lg:flex-row items-start justify-between gap-6 lg:gap-8 relative">
             <div
-              className={`transition-opacity duration-500 ease-out max-lg:contents lg:flex lg:flex-col lg:items-start lg:min-w-0 lg:relative ${
+              className={`transition-all duration-700 ease-in-out flex flex-col items-start min-w-0 relative ${
                 activePage === 'Journal'
                   ? activeSidebarTab === 'Book' || isClosingBook
                     ? 'w-full lg:w-22 flex-shrink-0 -translate-y-3 sm:-translate-y-5 lg:-translate-y-7'
@@ -491,9 +491,7 @@ function App() {
               }`}
             >
               <div
-                className={`lg:flex lg:flex-col lg:items-start lg:w-full order-1 lg:order-none ${
-                  activePage === 'Journal' ? 'max-lg:hidden' : 'max-lg:contents'
-                } ${
+                className={`w-full flex flex-col items-start ${
                   homeTextState === 'visible' && activePage === 'Home'
                     ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out'
                     : homeTextState === 'fading-out'
@@ -503,7 +501,7 @@ function App() {
                         : 'opacity-0 -translate-x-6 absolute top-0 left-0 h-0 max-h-0 overflow-hidden pointer-events-none transition-none'
                 }`}
               >
-                <div className="w-full order-1 lg:order-none flex items-center gap-4 sm:gap-6 mb-5 sm:mb-10 pt-2 sm:pt-14 lg:pt-20">
+                <div className="flex items-center gap-5 sm:gap-6 mb-8 sm:mb-10 pt-10 sm:pt-14 lg:pt-20">
                   {renderTimeIcon(timeInfo.phase)}
                   <div className="flex flex-col">
                     <span className="text-slate-500 text-xl sm:text-2xl md:text-3xl font-medium">
@@ -515,7 +513,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="w-full order-3 lg:order-none relative pl-8 sm:pl-10 pr-4 py-1 mt-4 sm:mt-18 md:mt-22 lg:mt-24">
+                <div className="relative pl-8 sm:pl-10 pr-4 py-2 mt-14 sm:mt-18 md:mt-22 lg:mt-24">
                   <span className="absolute -top-4 sm:-top-6 left-0 text-5xl sm:text-6xl md:text-7xl font-serif text-[#6eafe9]/70 select-none">
                     &ldquo;
                   </span>
@@ -610,12 +608,12 @@ function App() {
             </div>
 
             <div
-              className={`transition-opacity duration-500 ease-out flex flex-col items-center justify-start z-10 pt-1 pb-2 sm:py-2 lg:-translate-y-8 sm:-translate-y-6 w-full min-w-0 max-w-full overflow-visible order-2 lg:order-none max-lg:flex-shrink-0 max-lg:pt-0 max-lg:pb-0 ${
+              className={`transition-all duration-700 ease-in-out flex flex-col items-center justify-start z-10 -translate-y-4 sm:-translate-y-6 lg:-translate-y-8 py-2 ${
                 activePage === 'Journal'
                   ? activeSidebarTab === 'Book' || isClosingBook
-                    ? 'lg:flex-1 flex justify-center'
-                    : 'lg:w-[41%] flex-shrink-0 flex justify-center'
-                  : 'lg:w-[36%] flex-shrink-0 flex justify-center'
+                    ? 'w-full lg:flex-1 flex justify-center'
+                    : 'w-full lg:w-[41%] flex-shrink-0 flex justify-center'
+                  : 'w-full lg:w-[36%] flex-shrink-0 flex justify-center'
               }`}
             >
               <InteractiveBook
@@ -632,18 +630,18 @@ function App() {
             </div>
 
             <div
-              className={`transition-opacity duration-500 ease-out max-lg:contents lg:flex lg:flex-col lg:items-start lg:min-w-0 lg:max-w-full ${
+              className={`transition-all duration-700 ease-in-out flex flex-col items-start min-w-0 ${
                 activePage === 'Journal'
                   ? activeSidebarTab === 'Book' && !isClosingBook
-                    ? 'flex w-full lg:w-22 flex-shrink-0 pointer-events-auto lg:-translate-y-7 relative z-20 order-3 lg:order-none mt-2 lg:mt-0'
+                    ? 'w-full lg:w-22 flex-shrink-0 pointer-events-auto -translate-y-3 sm:-translate-y-5 lg:-translate-y-7 relative z-20'
                     : isClosingBook
                       ? 'w-0 lg:w-22 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0 flex-shrink-0'
                       : 'w-0 h-0 max-h-0 opacity-0 pointer-events-none overflow-hidden p-0 m-0'
-                  : 'w-full lg:w-[32%] pointer-events-auto lg:pl-6 translate-y-0 order-4 lg:order-none'
+                  : 'w-full lg:w-[32%] pointer-events-auto lg:pl-6 translate-y-0'
               }`}
             >
               <div
-                className={`w-full flex flex-col items-start pt-4 sm:pt-20 lg:pt-28 order-4 lg:order-none max-lg:pt-0 ${
+                className={`w-full flex flex-col items-start pt-14 sm:pt-20 lg:pt-28 ${
                   homeTextState === 'visible' && activePage === 'Home'
                     ? 'opacity-100 translate-x-0 relative pointer-events-auto transition-all duration-500 ease-out'
                     : homeTextState === 'fading-out'
@@ -675,10 +673,10 @@ function App() {
 
               {activePage === 'Journal' && (
                 <div
-                  className={`w-full flex justify-center transition-opacity duration-500 ease-out py-1 order-3 lg:order-none ${
+                  className={`w-full flex justify-center transition-all duration-300 ${
                     activeSidebarTab === 'Book' && !isClosingBook
-                      ? 'opacity-100 pointer-events-auto'
-                      : 'opacity-0 pointer-events-none hidden'
+                      ? 'opacity-100 translate-x-0 pointer-events-auto'
+                      : 'opacity-0 translate-x-4 pointer-events-none hidden'
                   }`}
                 >
                   <JournalToolbar textStyle={textStyle} onUpdateTextStyle={setTextStyle} />

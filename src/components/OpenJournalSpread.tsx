@@ -172,15 +172,36 @@ export function OpenJournalSpread({
     }
 
     const fontSize = parseInt(computed.fontSize) || 13
-    const isBold =
-      computed.fontWeight === '700' ||
-      computed.fontWeight === 'bold' ||
-      parseInt(computed.fontWeight) >= 600
-    const isItalic = computed.fontStyle === 'italic'
-    const isUnderline =
-      computed.textDecorationLine?.includes('underline') ||
-      computed.textDecoration?.includes('underline') ||
-      false
+
+    let isBold = false
+    let isItalic = false
+    let isUnderline = false
+
+    try {
+      isBold = document.queryCommandState('bold')
+      isItalic = document.queryCommandState('italic')
+      isUnderline = document.queryCommandState('underline')
+    } catch (e) {
+      void e
+    }
+
+    if (!isBold) {
+      isBold =
+        computed.fontWeight === '700' ||
+        computed.fontWeight === 'bold' ||
+        parseInt(computed.fontWeight) >= 600 ||
+        Boolean(element.closest('b, strong'))
+    }
+    if (!isItalic) {
+      isItalic = computed.fontStyle === 'italic' || Boolean(element.closest('i, em'))
+    }
+    if (!isUnderline) {
+      isUnderline =
+        computed.textDecorationLine?.includes('underline') ||
+        computed.textDecoration?.includes('underline') ||
+        Boolean(element.closest('u')) ||
+        false
+    }
 
     window.dispatchEvent(
       new CustomEvent('journal-style-sync', {
@@ -194,6 +215,114 @@ export function OpenJournalSpread({
         }
       })
     )
+  }
+
+  function ensureEditorFocus() {
+    if (!editorRef.current) return
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || !editorRef.current.contains(selection.anchorNode)) {
+      editorRef.current.focus()
+      const sel = window.getSelection()
+      if (sel && (sel.rangeCount === 0 || !editorRef.current.contains(sel.anchorNode))) {
+        const range = document.createRange()
+        range.selectNodeContents(editorRef.current)
+        range.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(range)
+      }
+    }
+  }
+
+  function toggleInlineFormat(command: 'bold' | 'italic' | 'underline') {
+    ensureEditorFocus()
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
+
+    const range = selection.getRangeAt(0)
+    if (range.collapsed) {
+      expandRangeToWord(range)
+    }
+
+    const node = selection.anchorNode
+    const element =
+      node?.nodeType === Node.TEXT_NODE
+        ? node.parentElement
+        : (node as HTMLElement | null)
+
+    const isCurrentActive =
+      document.queryCommandState(command) ||
+      (command === 'bold' &&
+        element &&
+        (window.getComputedStyle(element).fontWeight === '700' ||
+          window.getComputedStyle(element).fontWeight === 'bold' ||
+          parseInt(window.getComputedStyle(element).fontWeight) >= 600 ||
+          Boolean(element.closest('b, strong')))) ||
+      (command === 'italic' &&
+        element &&
+        (window.getComputedStyle(element).fontStyle === 'italic' ||
+          Boolean(element.closest('i, em')))) ||
+      (command === 'underline' &&
+        element &&
+        (window.getComputedStyle(element).textDecoration.includes('underline') ||
+          window.getComputedStyle(element).textDecorationLine.includes('underline') ||
+          Boolean(element.closest('u'))))
+
+    document.execCommand(command, false)
+
+    if (isCurrentActive && element && editorRef.current?.contains(element)) {
+      if (command === 'bold') {
+        const boldEl = element.closest('b, strong, span') as HTMLElement | null
+        if (
+          boldEl &&
+          editorRef.current.contains(boldEl) &&
+          (boldEl.style.fontWeight === '700' ||
+            boldEl.style.fontWeight === 'bold' ||
+            parseInt(boldEl.style.fontWeight) >= 600)
+        ) {
+          boldEl.style.fontWeight = ''
+        }
+      } else if (command === 'italic') {
+        const italicEl = element.closest('i, em, span') as HTMLElement | null
+        if (
+          italicEl &&
+          editorRef.current.contains(italicEl) &&
+          italicEl.style.fontStyle === 'italic'
+        ) {
+          italicEl.style.fontStyle = ''
+        }
+      } else if (command === 'underline') {
+        const underlineEl = element.closest('u, span') as HTMLElement | null
+        if (
+          underlineEl &&
+          editorRef.current.contains(underlineEl) &&
+          underlineEl.style.textDecoration.includes('underline')
+        ) {
+          underlineEl.style.textDecoration = ''
+        }
+      }
+      if (element.getAttribute('style') === '') {
+        element.removeAttribute('style')
+      }
+    }
+
+    handleInput()
+    updateToolbarFromSelection()
+  }
+
+  function handleEditorKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.ctrlKey || e.metaKey) {
+      const key = e.key.toLowerCase()
+      if (key === 'b') {
+        e.preventDefault()
+        toggleInlineFormat('bold')
+      } else if (key === 'i') {
+        e.preventDefault()
+        toggleInlineFormat('italic')
+      } else if (key === 'u') {
+        e.preventDefault()
+        toggleInlineFormat('underline')
+      }
+    }
   }
 
   function applyInlineStyle(styleUpdater: (span: HTMLElement) => void) {
@@ -235,21 +364,14 @@ export function OpenJournalSpread({
   }
 
   function resetSelectionFormatting() {
+    ensureEditorFocus()
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
     const range = selection.getRangeAt(0)
     if (range.collapsed) {
       expandRangeToWord(range)
     }
-    if (range.collapsed) return
-    const text = range.toString()
-    range.deleteContents()
-    const textNode = document.createTextNode(text)
-    range.insertNode(textNode)
-    const newRange = document.createRange()
-    newRange.selectNodeContents(textNode)
-    selection.removeAllRanges()
-    selection.addRange(newRange)
+    document.execCommand('removeFormat', false)
     handleInput()
     updateToolbarFromSelection()
   }
@@ -280,23 +402,11 @@ export function OpenJournalSpread({
           el.style.color = String(value)
         })
       } else if (action === 'bold') {
-        applyInlineStyle((el) => {
-          const currentWeight = window.getComputedStyle(el).fontWeight
-          el.style.fontWeight =
-            currentWeight === '700' || currentWeight === 'bold' || parseInt(currentWeight) >= 600
-              ? '400'
-              : '700'
-        })
+        toggleInlineFormat('bold')
       } else if (action === 'italic') {
-        applyInlineStyle((el) => {
-          const currentStyle = window.getComputedStyle(el).fontStyle
-          el.style.fontStyle = currentStyle === 'italic' ? 'normal' : 'italic'
-        })
+        toggleInlineFormat('italic')
       } else if (action === 'underline') {
-        applyInlineStyle((el) => {
-          const currentDecor = window.getComputedStyle(el).textDecoration
-          el.style.textDecoration = currentDecor.includes('underline') ? 'none' : 'underline'
-        })
+        toggleInlineFormat('underline')
       } else if (action === 'align') {
         if (editorRef.current) {
           editorRef.current.style.textAlign = String(value)
@@ -838,6 +948,7 @@ export function OpenJournalSpread({
                   suppressContentEditableWarning
                   onInput={handleInput}
                   onPaste={handleEditorPaste}
+                  onKeyDown={handleEditorKeyDown}
                   onSelect={updateToolbarFromSelection}
                   onMouseUp={updateToolbarFromSelection}
                   onKeyUp={updateToolbarFromSelection}

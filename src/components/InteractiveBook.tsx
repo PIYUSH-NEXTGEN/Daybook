@@ -58,7 +58,7 @@ export function InteractiveBook({
 
   if (stage === 'open') {
     return (
-      <div className={`w-full max-w-full flex justify-center overflow-x-clip px-1 sm:px-0 animate-in fade-in zoom-in-[0.98] duration-500 ease-out ${className}`}>
+      <div className={`w-full flex justify-center animate-in fade-in duration-300 ${className}`}>
         <OpenJournalSpread onClose={onClose} textStyle={textStyle} />
       </div>
     )
@@ -71,9 +71,13 @@ export function InteractiveBook({
           onOpen()
         }
       }}
-      className={`relative select-none touch-manipulation max-w-full transition-transform duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] ${
-        isShifted ? 'translate-x-0 lg:translate-x-1/2' : 'translate-x-0'
-      } ${
+      style={{
+        transform: isShifted
+          ? (typeof window !== 'undefined' && window.innerWidth < 1024 ? 'translateX(0)' : 'translateX(50%)')
+          : 'translateX(0)',
+        transition: 'transform 700ms cubic-bezier(0.25, 1, 0.5, 1)'
+      }}
+      className={`relative select-none touch-manipulation ${
         !isOpen ? 'cursor-pointer group' : ''
       } ${className}`}
     >
@@ -144,7 +148,7 @@ export function InteractiveBook({
 
         <div
           className={`absolute left-2 sm:left-2.5 right-0 top-1 bottom-1 origin-left transition-transform ${
-            stage === 'closing' ? 'duration-350 ease-in-out' : 'duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]'
+            stage === 'closing' ? 'duration-350 ease-in-out' : 'duration-600 ease-out'
           } z-2 pointer-events-none`}
           style={{
             transformStyle: 'preserve-3d',
