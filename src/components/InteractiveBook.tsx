@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Sparkles, Heart, Share2, Sun, Flame } from 'lucide-react'
 import sceneImg from '../assets/images/scene.webp'
 import { OpenJournalSpread } from './OpenJournalSpread'
-import type { JournalTextStyle } from './JournalToolbar'
+import type { JournalTextStyle } from './journalTextStyle'
 
 interface InteractiveBookProps {
   isOpen: boolean
@@ -24,48 +24,37 @@ export function InteractiveBook({
   )
   const [isFlipped, setIsFlipped] = useState(isOpen)
   const [isShifted, setIsShifted] = useState(isOpen)
-  const prevIsOpen = useRef(isOpen)
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen)
+
+  if (prevIsOpen !== isOpen) {
+    setPrevIsOpen(isOpen)
+    setStage(isOpen ? 'opening' : 'closing')
+    setIsFlipped(true)
+    setIsShifted(true)
+  }
 
   useEffect(() => {
-    if (prevIsOpen.current === isOpen) {
-      return
-    }
-
-    prevIsOpen.current = isOpen
-
-    let t1: ReturnType<typeof setTimeout>
-    let t2: ReturnType<typeof setTimeout>
-
-    if (isOpen) {
-      setStage('opening')
-      setIsFlipped(true)
-      setIsShifted(true)
-      t1 = setTimeout(() => {
+    if (stage === 'opening') {
+      const t = setTimeout(() => {
         setStage('open')
       }, 700)
-    } else {
-      setStage('closing')
-      setIsFlipped(true)
-      setIsShifted(true)
-      t1 = setTimeout(() => {
+      return () => clearTimeout(t)
+    }
+
+    if (stage === 'closing') {
+      const t1 = setTimeout(() => {
         setIsFlipped(false)
       }, 40)
-      t2 = setTimeout(() => {
+      const t2 = setTimeout(() => {
         setStage('closed')
+        setIsShifted(false)
       }, 480)
+      return () => {
+        clearTimeout(t1)
+        clearTimeout(t2)
+      }
     }
-
-    return () => {
-      clearTimeout(t1)
-      clearTimeout(t2)
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen && stage === 'closed' && isShifted) {
-      setIsShifted(false)
-    }
-  }, [isOpen, stage, isShifted])
+  }, [stage])
 
   if (stage === 'open') {
     return (

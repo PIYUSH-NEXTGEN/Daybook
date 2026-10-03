@@ -17,7 +17,7 @@ import {
   RotateCcw
 } from 'lucide-react'
 import defaultPhoto from '../assets/images/scene.webp'
-import type { JournalTextStyle } from './JournalToolbar'
+import type { JournalTextStyle } from './journalTextStyle'
 
 type WeatherType = 'sunny' | 'partlyCloudy' | 'rainy' | 'windy' | 'snowy'
 
@@ -49,13 +49,28 @@ export function OpenJournalSpread({
     try {
       const saved = localStorage.getItem('daybook_journal_goals')
       if (saved) return JSON.parse(saved)
-    } catch {}
+    } catch (e) {
+      void e
+    }
     return []
   })
   const [newGoalText, setNewGoalText] = useState('')
   const [isAddingGoal, setIsAddingGoal] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
-  const [isFavorited, setIsFavorited] = useState(false)
+  const [isFavorited, setIsFavorited] = useState(() => {
+    try {
+      const saved = localStorage.getItem('daybook_saved_quotes')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          return parsed.some((q: { id: string }) => q.id === 'quote-savor-moment')
+        }
+      }
+    } catch (e) {
+      void e
+    }
+    return true
+  })
   const [entryHtml, setEntryHtml] = useState(() => {
     return (
       localStorage.getItem('daybook_journal_entry_html') ||
@@ -211,7 +226,9 @@ export function OpenJournalSpread({
       newRange.selectNodeContents(span)
       selection.removeAllRanges()
       selection.addRange(newRange)
-    } catch {}
+    } catch (e) {
+      void e
+    }
 
     handleInput()
     updateToolbarFromSelection()
@@ -220,7 +237,7 @@ export function OpenJournalSpread({
   function resetSelectionFormatting() {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
-    let range = selection.getRangeAt(0)
+    const range = selection.getRangeAt(0)
     if (range.collapsed) {
       expandRangeToWord(range)
     }
@@ -240,7 +257,7 @@ export function OpenJournalSpread({
   useEffect(() => {
     function handleJournalFormat(e: Event) {
       const { action, value } =
-        (e as CustomEvent<{ action: string; value?: any }>).detail || {}
+        (e as CustomEvent<{ action: string; value?: string | number }>).detail || {}
       if (!action) return
 
       if (action === 'font') {
@@ -251,7 +268,8 @@ export function OpenJournalSpread({
           mono: 'ui-monospace, SFMono-Regular, Menlo, monospace'
         }
         applyInlineStyle((el) => {
-          el.style.fontFamily = fontMap[value] || value
+          const fontKey = String(value)
+          el.style.fontFamily = fontMap[fontKey] || fontKey
         })
       } else if (action === 'size') {
         applyInlineStyle((el) => {
@@ -259,7 +277,7 @@ export function OpenJournalSpread({
         })
       } else if (action === 'color') {
         applyInlineStyle((el) => {
-          el.style.color = value
+          el.style.color = String(value)
         })
       } else if (action === 'bold') {
         applyInlineStyle((el) => {
@@ -281,7 +299,7 @@ export function OpenJournalSpread({
         })
       } else if (action === 'align') {
         if (editorRef.current) {
-          editorRef.current.style.textAlign = value
+          editorRef.current.style.textAlign = String(value)
           handleInput()
         }
       } else if (action === 'reset') {
@@ -304,7 +322,9 @@ export function OpenJournalSpread({
   useEffect(() => {
     try {
       localStorage.setItem('daybook_journal_goals', JSON.stringify(goals))
-    } catch {}
+    } catch (e) {
+      void e
+    }
   }, [goals])
 
   useEffect(() => {
@@ -383,6 +403,74 @@ export function OpenJournalSpread({
     navigator.clipboard.writeText(promptText)
     setIsCopied(true)
     setTimeout(() => setIsCopied(false), 2000)
+  }
+
+  useEffect(() => {
+    function handleQuotesUpdated() {
+      try {
+        const saved = localStorage.getItem('daybook_saved_quotes')
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (Array.isArray(parsed)) {
+            setIsFavorited(parsed.some((q: { id: string }) => q.id === 'quote-savor-moment'))
+            return
+          }
+        }
+        setIsFavorited(false)
+      } catch (e) {
+        void e
+      }
+    }
+
+    handleQuotesUpdated()
+    window.addEventListener('daybook_quotes_updated', handleQuotesUpdated)
+    window.addEventListener('storage', handleQuotesUpdated)
+    return () => {
+      window.removeEventListener('daybook_quotes_updated', handleQuotesUpdated)
+      window.removeEventListener('storage', handleQuotesUpdated)
+    }
+  }, [])
+
+  function handleToggleFavoriteQuote(e?: React.MouseEvent) {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    let next = false
+    try {
+      let quotes: { id: string; title: string; text: string; time: string }[] = []
+      const saved = localStorage.getItem('daybook_saved_quotes')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          quotes = parsed
+        }
+      }
+      const isCurrentlySaved = quotes.some((q) => q.id === 'quote-savor-moment')
+      next = !isCurrentlySaved
+
+      if (next) {
+        quotes = [
+          {
+            id: 'quote-savor-moment',
+            title: 'Savor the Moment',
+            text: 'I slow down to hear the flowers bloom and feel the gentle touch of the breeze.',
+            time: currentTimeString || '10:05 PM'
+          },
+          ...quotes.filter((q) => q.id !== 'quote-savor-moment')
+        ]
+      } else {
+        quotes = quotes.filter((q) => q.id !== 'quote-savor-moment')
+      }
+
+      localStorage.setItem('daybook_saved_quotes', JSON.stringify(quotes))
+    } catch (e) {
+      void e
+    }
+
+    setIsFavorited(next)
+    window.dispatchEvent(new Event('daybook_quotes_updated'))
   }
 
   const weatherOptions: { type: WeatherType; label: string; icon: typeof Sun }[] = [
@@ -719,13 +807,14 @@ export function OpenJournalSpread({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsFavorited((prev) => !prev)}
-                  className={`transition-colors p-0.5 cursor-pointer ${
+                  onClick={handleToggleFavoriteQuote}
+                  className={`p-1 rounded-md transition-colors cursor-pointer flex items-center justify-center ${
                     isFavorited
-                      ? 'text-rose-500 fill-rose-500'
-                      : 'hover:text-rose-500'
+                      ? 'text-rose-500 fill-rose-500 hover:text-rose-600'
+                      : 'text-slate-400 hover:text-rose-500'
                   }`}
-                  title="Favorite prompt"
+                  aria-label={isFavorited ? 'Unlike quote' : 'Like quote'}
+                  title={isFavorited ? 'Unlike quote' : 'Like quote'}
                 >
                   <Heart className={`w-3.5 h-3.5 ${isFavorited ? 'fill-rose-500' : ''}`} />
                 </button>
