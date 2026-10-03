@@ -105,14 +105,14 @@ export function JournalToolbar({
   return (
     <div
       ref={toolbarRef}
-      className={`w-full md:w-20 lg:w-22 bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 py-3 sm:py-4 px-1.5 sm:px-2 flex flex-row md:flex-col items-center justify-around md:justify-start gap-1 sm:gap-2 flex-shrink-0 relative select-none ${className}`}
+      className={`w-full md:w-20 lg:w-22 bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 py-2 md:py-4 px-2 md:px-2 grid grid-cols-4 md:flex md:flex-col items-center justify-items-center md:justify-start gap-x-1 gap-y-1.5 sm:gap-2 flex-shrink-0 relative select-none mt-1 mb-2 max-lg:[&>*]:min-w-0 ${className}`}
     >
-      <div className="relative">
+      <div className="w-full md:relative">
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => togglePopup('font')}
-          className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
+          className={`flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 ${
             activePopup === 'font'
               ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-xs font-semibold'
               : 'text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium'
@@ -124,7 +124,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'font' && (
-          <div className="absolute right-[calc(100%+14px)] top-0 z-50 bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-2.5 min-w-[170px] animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-2.5 min-w-[170px] animate-in fade-in zoom-in-95 duration-150">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1 block">
               Font Family
             </span>
@@ -157,12 +157,12 @@ export function JournalToolbar({
         )}
       </div>
 
-      <div className="relative">
+      <div className="w-full md:relative">
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => togglePopup('size')}
-          className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
+          className={`flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 ${
             activePopup === 'size'
               ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-xs font-semibold'
               : 'text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium'
@@ -174,7 +174,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'size' && (
-          <div className="absolute right-[calc(100%+14px)] top-0 z-50 bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[180px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[180px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               Font Size
             </span>
@@ -242,12 +242,12 @@ export function JournalToolbar({
         )}
       </div>
 
-      <div className="relative">
+      <div className="w-full md:relative">
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => togglePopup('color')}
-          className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
+          className={`flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 ${
             activePopup === 'color'
               ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-xs font-semibold'
               : 'text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium'
@@ -265,7 +265,7 @@ export function JournalToolbar({
         </button>
 
         {activePopup === 'color' && (
-          <div className="absolute right-[calc(100%+14px)] top-0 z-50 bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[190px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] md:left-auto md:translate-x-0 md:bottom-auto md:right-[calc(100%+14px)] md:top-0 z-50 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-3 min-w-[190px] animate-in fade-in zoom-in-95 duration-150 space-y-3">
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               Ink Color
             </span>
@@ -319,14 +319,14 @@ export function JournalToolbar({
           onUpdateTextStyle((prev) => ({ ...prev, isBold: !prev.isBold }))
           dispatchJournalFormat({ action: 'bold' })
         }}
-        className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
+        className={`flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 ${
           textStyle.isBold
             ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-xs font-semibold'
             : 'text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium'
         }`}
         title="Toggle bold"
       >
-        <Bold className="w-4.5 h-4.5" />
+        <Bold className="w-5 h-5 md:w-4.5 md:h-4.5" />
         <span className="text-[10px] tracking-tight">Bold</span>
       </button>
 
@@ -337,14 +337,14 @@ export function JournalToolbar({
           onUpdateTextStyle((prev) => ({ ...prev, isItalic: !prev.isItalic }))
           dispatchJournalFormat({ action: 'italic' })
         }}
-        className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
+        className={`flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 ${
           textStyle.isItalic
             ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-xs font-semibold'
             : 'text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium'
         }`}
         title="Toggle italic"
       >
-        <Italic className="w-4.5 h-4.5" />
+        <Italic className="w-5 h-5 md:w-4.5 md:h-4.5" />
         <span className="text-[10px] tracking-tight">Italic</span>
       </button>
 
@@ -355,14 +355,14 @@ export function JournalToolbar({
           onUpdateTextStyle((prev) => ({ ...prev, isUnderline: !prev.isUnderline }))
           dispatchJournalFormat({ action: 'underline' })
         }}
-        className={`flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 ${
+        className={`flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 ${
           textStyle.isUnderline
             ? 'text-[#4f8ee6] bg-[#eff6fc] shadow-xs font-semibold'
             : 'text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium'
         }`}
         title="Toggle underline"
       >
-        <Underline className="w-4.5 h-4.5" />
+        <Underline className="w-5 h-5 md:w-4.5 md:h-4.5" />
         <span className="text-[10px] tracking-tight">Line</span>
       </button>
 
@@ -370,10 +370,10 @@ export function JournalToolbar({
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={cycleAlign}
-        className="flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium"
+        className="flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 text-slate-500 hover:text-[#4f8ee6] hover:bg-slate-50 font-medium"
         title={`Align text: currently ${textStyle.textAlign}`}
       >
-        <AlignIcon className="w-4.5 h-4.5" />
+        <AlignIcon className="w-5 h-5 md:w-4.5 md:h-4.5" />
         <span className="text-[10px] tracking-tight capitalize">{textStyle.textAlign}</span>
       </button>
 
@@ -384,10 +384,10 @@ export function JournalToolbar({
           onUpdateTextStyle(() => defaultTextStyle)
           dispatchJournalFormat({ action: 'reset' })
         }}
-        className="flex flex-col items-center justify-center gap-1 w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 flex-shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-50 font-medium"
+        className="flex flex-col items-center justify-center gap-1 w-full md:w-16 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6eafe9]/50 min-w-0 text-slate-400 hover:text-slate-600 hover:bg-slate-50 font-medium"
         title="Reset formatting to default"
       >
-        <RotateCcw className="w-4 h-4" />
+        <RotateCcw className="w-5 h-5" />
         <span className="text-[10px] tracking-tight">Reset</span>
       </button>
     </div>

@@ -14,12 +14,12 @@ export function AboutPage({ onStartWriting }: AboutPageProps) {
             About DayBook
           </h1>
 
-          <div className="space-y-4 sm:space-y-5">
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+          <div className="space-y-5 sm:space-y-6">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               DayBook is your daily sanctuary for mindful reflection, personal growth, and creative journaling. A private, local-first AI companion that learns your habits, identifies recurring patterns, and helps you reflect on your days and routines.
             </p>
 
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               Designed from the ground up to keep your personal thoughts safe, DayBook stores all journal entries on your own device. You can track goals, review wins and struggles, and explore personal insights without sending private reflections to cloud servers or third parties.
             </p>
           </div>
@@ -33,12 +33,12 @@ export function AboutPage({ onStartWriting }: AboutPageProps) {
             What We Built
           </h2>
 
-          <div className="space-y-4 sm:space-y-5">
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+          <div className="space-y-5 sm:space-y-6">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               DayBook started with a simple problem: a friend of ours was already journaling, but most of the time, the entries just stayed there. They could write about a stressful day, a productive week, a bad habit, or something that kept coming up, but noticing those patterns across dozens of entries was almost impossible manually.
             </p>
 
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               So we built DayBook for them. DayBook is a private AI journal that reads your entries locally and helps surface patterns in your habits, mood, routines, and thoughts over time. Instead of just storing what you write, it helps you understand what keeps showing up.
             </p>
           </div>
@@ -52,12 +52,12 @@ export function AboutPage({ onStartWriting }: AboutPageProps) {
             Privacy by Design
           </h2>
 
-          <div className="space-y-4 sm:space-y-5">
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+          <div className="space-y-5 sm:space-y-6">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               The important part is where this happens. Your journal never needs to leave your device. DayBook uses a local LLM, so the AI can work with your personal entries without sending them to a cloud AI service.
             </p>
 
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               We wanted to build something that was genuinely useful to one person, while also answering a question we kept coming back to: Can AI be helpful with something as personal as journaling without requiring you to give away your data? DayBook is our attempt at an answer.
             </p>
           </div>
@@ -71,12 +71,12 @@ export function AboutPage({ onStartWriting }: AboutPageProps) {
             Open Source &amp; Hacktoberfest
           </h2>
 
-          <div className="space-y-4 sm:space-y-5">
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+          <div className="space-y-5 sm:space-y-6">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               Crafted as an open-source project for Hacktoberfest, DayBook runs entirely on your own machine powered by the Gemma 3:4B model through Ollama. No remote servers, no third-party tracking, and no subscriptions.
             </p>
 
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-sans indent-[30%] sm:indent-[38%] md:indent-[42%]">
+            <p className="text-base sm:text-lg text-slate-600 leading-[1.8] font-sans text-left">
               Just an honest, local-first companion designed to help you reflect, discover meaningful patterns, and keep your journal truly yours.
             </p>
           </div>
