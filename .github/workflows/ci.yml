@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-build:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            server/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install server dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: server
+
+      - name: Type check frontend
+        run: pnpm exec tsc -b --noEmit
+
+      - name: Type check server
+        run: pnpm exec tsc --noEmit
+        working-directory: server
+
+      - name: Lint (frontend & server)
+        run: pnpm run lint
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Build server
+        run: pnpm run build
+        working-directory: server

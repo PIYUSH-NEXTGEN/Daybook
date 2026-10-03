@@ -5,14 +5,18 @@ import {
   Pencil,
   ArrowRight,
   ArrowLeft,
-  Settings as SettingsIcon,
-  Bookmark,
-  CheckCircle2
+  Settings as SettingsIcon
 } from 'lucide-react'
 import logo from './assets/images/logo-nobg.webp'
 import { InteractiveBook } from './components/InteractiveBook'
 import { AboutPage } from './components/AboutPage'
-import { JournalToolbar, defaultTextStyle, type JournalTextStyle } from './components/JournalToolbar'
+import { AnalyticsAIView } from './components/AnalyticsAIView'
+import { CalendarView } from './components/CalendarView'
+import { GoalsView } from './components/GoalsView'
+import { LibraryView } from './components/LibraryView'
+import { SettingsView } from './components/SettingsView'
+import { JournalToolbar } from './components/JournalToolbar'
+import { defaultTextStyle, type JournalTextStyle } from './components/journalTextStyle'
 
 const navItems = ['Home', 'Journal', 'About'] as const
 type NavItem = (typeof navItems)[number]
@@ -167,7 +171,9 @@ function App() {
       if (saved) {
         return JSON.parse(saved)
       }
-    } catch {}
+    } catch (e) {
+      void e
+    }
     return defaultTextStyle
   })
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -176,7 +182,9 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('daybook_journal_text_style', JSON.stringify(textStyle))
-    } catch {}
+    } catch (e) {
+      void e
+    }
   }, [textStyle])
 
   useEffect(() => {
@@ -476,7 +484,7 @@ function App() {
                 activePage === 'Journal'
                   ? activeSidebarTab === 'Book' || isClosingBook
                     ? 'w-full lg:w-22 flex-shrink-0 -translate-y-3 sm:-translate-y-5 lg:-translate-y-7'
-                    : 'w-full lg:w-[62%] -translate-y-3 sm:-translate-y-5 lg:-translate-y-7'
+                    : 'w-full lg:w-[56%] -translate-y-3 sm:-translate-y-5 lg:-translate-y-7'
                   : 'w-full lg:w-[32%] translate-y-0'
               }`}
             >
@@ -550,14 +558,14 @@ function App() {
                   </div>
 
                   {activeSidebarTab !== 'Book' && !isClosingBook && (
-                    <div className="flex-1 w-full bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-6 sm:p-8 min-h-[460px] sm:min-h-[500px] lg:min-h-[545px] flex flex-col justify-between animate-in fade-in duration-300">
+                    <div className="flex-1 w-full max-w-xl bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-100 p-4 sm:p-6 min-h-[400px] sm:min-h-[440px] lg:min-h-[480px] flex flex-col justify-between animate-in fade-in duration-300">
                       <div>
-                        <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
+                        <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
                           <div>
-                            <span className="text-xs sm:text-sm font-semibold tracking-wider text-[#6eafe9] uppercase">
+                            <span className="text-[11px] sm:text-xs font-semibold tracking-wider text-[#6eafe9] uppercase">
                               DayBook
                             </span>
-                            <h2 className="text-2xl sm:text-3xl font-bold text-[#1a2b49] mt-0.5">
+                            <h2 className="text-xl sm:text-2xl font-bold text-[#1a2b49] mt-0.5">
                               {activeSidebarTab}
                             </h2>
                           </div>
@@ -572,175 +580,23 @@ function App() {
                         </div>
 
                       {activeSidebarTab === 'Analytics' && (
-                        <div className="space-y-6">
-                          <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                            <div className="bg-[#FAF9F5] p-3.5 sm:p-4 rounded-2xl border border-slate-100">
-                              <span className="text-xs font-medium text-slate-400">Streak</span>
-                              <p className="text-xl sm:text-2xl font-bold text-[#1a2b49] mt-1">7 Days</p>
-                              <span className="text-[11px] text-emerald-600 font-medium">+2 this week</span>
-                            </div>
-                            <div className="bg-[#FAF9F5] p-3.5 sm:p-4 rounded-2xl border border-slate-100">
-                              <span className="text-xs font-medium text-slate-400">Entries</span>
-                              <p className="text-xl sm:text-2xl font-bold text-[#1a2b49] mt-1">24</p>
-                              <span className="text-[11px] text-slate-400 font-medium">This month</span>
-                            </div>
-                            <div className="bg-[#FAF9F5] p-3.5 sm:p-4 rounded-2xl border border-slate-100">
-                              <span className="text-xs font-medium text-slate-400">Words</span>
-                              <p className="text-xl sm:text-2xl font-bold text-[#1a2b49] mt-1">8,450</p>
-                              <span className="text-[11px] text-[#6eafe9] font-medium">Avg 350 / entry</span>
-                            </div>
-                          </div>
-
-                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">
-                              Weekly Activity
-                            </span>
-                            <div className="flex items-end justify-between gap-2 h-28 pt-4 pb-1 px-2">
-                              {[
-                                { day: 'Mon', h: '65%' },
-                                { day: 'Tue', h: '85%' },
-                                { day: 'Wed', h: '45%' },
-                                { day: 'Thu', h: '95%' },
-                                { day: 'Fri', h: '80%' },
-                                { day: 'Sat', h: '60%' },
-                                { day: 'Sun', h: '70%' },
-                              ].map(({ day, h }) => (
-                                <div key={day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                                  <div
-                                    className="w-full max-w-[28px] bg-gradient-to-t from-[#6eafe9] to-[#99cdfb] rounded-t-lg transition-all hover:opacity-90"
-                                    style={{ height: h }}
-                                  />
-                                  <span className="text-[11px] text-slate-400 font-medium">{day}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
+                        <AnalyticsAIView />
                       )}
 
                       {activeSidebarTab === 'Calendar' && (
-                        <div className="space-y-4">
-                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
-                            <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-                                <span key={d} className="text-xs font-semibold text-slate-400 py-1">{d}</span>
-                              ))}
-                            </div>
-                            <div className="grid grid-cols-7 gap-1 text-center">
-                              {Array.from({ length: 31 }, (_, i) => {
-                                const day = i + 1
-                                const isToday = day === 2
-                                const hasEntry = [1, 2, 4, 7, 8, 11, 14, 15, 18, 20, 22, 25, 28, 29].includes(day)
-                                return (
-                                  <div
-                                    key={day}
-                                    className={`py-2 text-xs sm:text-sm rounded-xl font-medium relative flex flex-col items-center justify-center transition-colors ${
-                                      isToday
-                                        ? 'bg-[#6eafe9] text-white font-bold shadow-sm'
-                                        : 'text-slate-600 hover:bg-slate-200/50'
-                                    }`}
-                                  >
-                                    <span>{day}</span>
-                                    {hasEntry && !isToday && (
-                                      <span className="w-1 h-1 rounded-full bg-[#6eafe9] mt-0.5" />
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-                            <span>Highlighted: Friday, October 2, 2026</span>
-                            <span className="text-[#6eafe9] font-medium">14 Entries Recorded</span>
-                          </div>
-                        </div>
+                        <CalendarView onOpenJournal={handleOpenJournal} />
                       )}
 
                       {activeSidebarTab === 'Goals' && (
-                        <div className="space-y-4">
-                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-semibold text-[#1a2b49]">Daily Evening Reflection</span>
-                              <span className="text-xs font-bold text-[#6eafe9]">6 / 7 Days</span>
-                            </div>
-                            <div className="w-full h-2.5 bg-slate-200/70 rounded-full overflow-hidden">
-                              <div className="h-full bg-[#6eafe9] rounded-full" style={{ width: '86%' }} />
-                            </div>
-                            <span className="text-xs text-slate-400 mt-2 block">1 day left to complete this week</span>
-                          </div>
-
-                          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-slate-100">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-semibold text-[#1a2b49]">Weekly Word Target</span>
-                              <span className="text-xs font-bold text-[#6eafe9]">840 / 1,000</span>
-                            </div>
-                            <div className="w-full h-2.5 bg-slate-200/70 rounded-full overflow-hidden">
-                              <div className="h-full bg-[#6eafe9] rounded-full" style={{ width: '84%' }} />
-                            </div>
-                            <span className="text-xs text-slate-400 mt-2 block">160 words away from weekly target</span>
-                          </div>
-
-                          <div className="flex items-center gap-3 p-3.5 bg-emerald-50/60 border border-emerald-200/60 rounded-2xl text-emerald-800">
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                            <span className="text-xs sm:text-sm font-medium">Milestone achieved: 30 consecutive days with an entry</span>
-                          </div>
-                        </div>
+                        <GoalsView />
                       )}
 
                       {activeSidebarTab === 'Library' && (
-                        <div className="space-y-3">
-                          {[
-                            { title: 'Volume III: Autumn Stillness', period: 'Sep - Nov 2026', count: '24 entries', active: true },
-                            { title: 'Volume II: Summer Solstice', period: 'Jun - Aug 2026', count: '56 entries', active: false },
-                            { title: 'Volume I: Spring Awakening', period: 'Mar - May 2026', count: '42 entries', active: false },
-                          ].map((vol) => (
-                            <div
-                              key={vol.title}
-                              className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
-                                vol.active
-                                  ? 'bg-[#eff6fc]/60 border-[#6eafe9]/40 shadow-sm'
-                                  : 'bg-[#FAF9F5] border-slate-100 hover:border-slate-200'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <Bookmark className={`w-5 h-5 ${vol.active ? 'text-[#6eafe9]' : 'text-slate-400'}`} />
-                                <div>
-                                  <h4 className="text-sm font-semibold text-[#1a2b49]">{vol.title}</h4>
-                                  <span className="text-xs text-slate-400">{vol.period}</span>
-                                </div>
-                              </div>
-                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white text-slate-600 border border-slate-200/60 shadow-xs">
-                                {vol.count}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                        <LibraryView />
                       )}
 
                       {activeSidebarTab === 'Settings' && (
-                        <div className="space-y-3">
-                          <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-slate-100 flex items-center justify-between">
-                            <div>
-                              <h4 className="text-sm font-semibold text-[#1a2b49]">Color Palette</h4>
-                              <p className="text-xs text-slate-400">Warm Cream and Blue Canvas</p>
-                            </div>
-                            <span className="text-xs font-semibold text-[#6eafe9]">Active</span>
-                          </div>
-                          <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-slate-100 flex items-center justify-between">
-                            <div>
-                              <h4 className="text-sm font-semibold text-[#1a2b49]">Handwritten Font</h4>
-                              <p className="text-xs text-slate-400">Cedarville Cursive for daily quotes</p>
-                            </div>
-                            <span className="text-xs font-semibold text-[#6eafe9]">Active</span>
-                          </div>
-                          <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-slate-100 flex items-center justify-between">
-                            <div>
-                              <h4 className="text-sm font-semibold text-[#1a2b49]">Evening Reminder</h4>
-                              <p className="text-xs text-slate-400">Daily gentle prompt at 8:30 PM</p>
-                            </div>
-                            <span className="text-xs font-semibold text-emerald-600">Enabled</span>
-                          </div>
-                        </div>
+                        <SettingsView />
                       )}
                     </div>
                   </div>
@@ -754,7 +610,7 @@ function App() {
                 activePage === 'Journal'
                   ? activeSidebarTab === 'Book' || isClosingBook
                     ? 'w-full lg:flex-1 flex justify-center'
-                    : 'w-full lg:w-[35%] flex-shrink-0 flex justify-center'
+                    : 'w-full lg:w-[41%] flex-shrink-0 flex justify-center'
                   : 'w-full lg:w-[36%] flex-shrink-0 flex justify-center'
               }`}
             >
