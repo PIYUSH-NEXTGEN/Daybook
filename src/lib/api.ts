@@ -250,3 +250,61 @@ export async function analyzeWithAI(question: string, signal?: AbortSignal): Pro
   return data.reflection
 }
 
+export type AiQueryType =
+  | 'previous_goals'
+  | 'current_goals'
+  | 'goal_progress'
+  | 'current_streak'
+  | 'journal_count'
+  | 'recent_journal'
+  | 'reflection'
+  | 'daily_quote'
+  | 'unsupported'
+
+export interface AiQueryGoal {
+  text: string
+  completed: boolean
+}
+
+export interface AiQueryAnswerMap {
+  previous_goals: { date: string | null; goals: AiQueryGoal[] }
+  current_goals: { date: string; goals: AiQueryGoal[] }
+  goal_progress: {
+    goalCount: number
+    completedGoalCount: number
+    completionRate: number
+    from: string | null
+    to: string | null
+  }
+  current_streak: { currentStreak: number }
+  journal_count: { journalEntryCount: number; from: string | null; to: string | null }
+  recent_journal: { date: string; found: boolean; content: string | null }
+  reflection: AiReflection
+  daily_quote: { text: string | null; generatedAt: string | null }
+  unsupported: { reason: string }
+}
+
+export type AiQueryResponse<T extends AiQueryType = AiQueryType> = {
+  [K in AiQueryType]: {
+    type: K
+    answer: AiQueryAnswerMap[K]
+    displayText: string
+  }
+}[T]
+
+export async function queryAI(
+  question: string,
+  selectedJournalDate?: string,
+  signal?: AbortSignal,
+): Promise<AiQueryResponse> {
+  return request<AiQueryResponse>('/api/ai/query', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      ...(selectedJournalDate ? { selectedJournalDate } : {}),
+    }),
+    signal,
+  })
+}
+

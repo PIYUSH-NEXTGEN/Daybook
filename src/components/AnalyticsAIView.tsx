@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { ArrowUp, Loader2, RotateCcw, Bot } from 'lucide-react'
-import { analyzeWithAI, type AiReflection } from '../lib/api'
+import { queryAI, type AiQueryResponse } from '../lib/api'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
-  reflection?: AiReflection
+  query?: AiQueryResponse
   isError?: boolean
 }
 
@@ -62,13 +62,13 @@ export function AnalyticsAIView() {
     const requestId = ++requestIdRef.current
 
     try {
-      const reflection = await analyzeWithAI(text, controller.signal)
+      const result = await queryAI(text, undefined, controller.signal)
       if (requestId !== requestIdRef.current) return
       const assistantMessage: Message = {
         id: nextId(),
         role: 'assistant',
-        content: reflection.summary,
-        reflection,
+        content: result.displayText,
+        query: result,
       }
       setMessages((prev) => [...prev, assistantMessage])
     } catch (err) {
@@ -76,10 +76,7 @@ export function AnalyticsAIView() {
       const assistantMessage: Message = {
         id: nextId(),
         role: 'assistant',
-        content:
-          err instanceof Error
-            ? err.message
-            : 'DayBook could not complete this reflection.',
+        content: err instanceof Error ? err.message : 'DayBook could not answer that.',
         isError: true,
       }
       setMessages((prev) => [...prev, assistantMessage])
@@ -141,65 +138,68 @@ export function AnalyticsAIView() {
               </button>
             </div>
 
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="w-7 h-7 rounded-lg bg-[#eff6fc] border border-[#6eafe9]/30 flex items-center justify-center text-[#4f8ee6] flex-shrink-0 mt-0.5">
-                    <Bot className="w-4 h-4" />
-                  </div>
-                )}
+            {messages.map((msg) => {
+              const reflection = msg.query?.type === 'reflection' ? msg.query.answer : null
+              return (
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed select-text ${
-                    msg.role === 'user'
-                      ? 'bg-[#1a2b49] text-white rounded-br-xs shadow-xs whitespace-pre-wrap'
-                      : msg.isError
-                        ? 'bg-rose-50 border border-rose-200/70 text-rose-800 rounded-bl-xs'
-                        : 'bg-[#FAF9F5] border border-slate-100 text-slate-700 rounded-bl-xs'
-                  }`}
+                  key={msg.id}
+                  className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  {msg.role === 'user' || !msg.reflection ? (
-                    <span className="whitespace-pre-wrap">{msg.content}</span>
-                  ) : (
-                    <div className="space-y-2.5">
-                      <p className="whitespace-pre-wrap">{msg.reflection.summary}</p>
-
-                      {msg.reflection.observations.length > 0 && (
-                        <ul className="space-y-2 pt-0.5">
-                          {msg.reflection.observations.map((observation, index) => (
-                            <li key={index} className="border-l-2 border-[#6eafe9]/40 pl-2.5">
-                              <p className="font-semibold text-[#1a2b49]">{observation.title}</p>
-                              <p className="text-slate-600 mt-0.5">{observation.detail}</p>
-                              {observation.evidence.length > 0 && (
-                                <ul className="mt-1 space-y-0.5">
-                                  {observation.evidence.map((item, itemIndex) => (
-                                    <li key={itemIndex} className="text-[11px] text-slate-400">
-                                      <span className="font-medium">{item.date}</span> {item.excerpt}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-
-                      {msg.reflection.encouragement && (
-                        <p className="text-slate-600">{msg.reflection.encouragement}</p>
-                      )}
-
-                      {msg.reflection.nextStep && (
-                        <p className="text-[#4f8ee6] font-medium">
-                          Next step: {msg.reflection.nextStep}
-                        </p>
-                      )}
+                  {msg.role === 'assistant' && (
+                    <div className="w-7 h-7 rounded-lg bg-[#eff6fc] border border-[#6eafe9]/30 flex items-center justify-center text-[#4f8ee6] flex-shrink-0 mt-0.5">
+                      <Bot className="w-4 h-4" />
                     </div>
                   )}
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed select-text ${
+                      msg.role === 'user'
+                        ? 'bg-[#1a2b49] text-white rounded-br-xs shadow-xs whitespace-pre-wrap'
+                        : msg.isError
+                          ? 'bg-rose-50 border border-rose-200/70 text-rose-800 rounded-bl-xs'
+                          : 'bg-[#FAF9F5] border border-slate-100 text-slate-700 rounded-bl-xs'
+                    }`}
+                  >
+                    {reflection === null ? (
+                      <span className="whitespace-pre-wrap">{msg.content}</span>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <p className="whitespace-pre-wrap">{reflection.summary}</p>
+
+                        {reflection.observations.length > 0 && (
+                          <ul className="space-y-2 pt-0.5">
+                            {reflection.observations.map((observation, index) => (
+                              <li key={index} className="border-l-2 border-[#6eafe9]/40 pl-2.5">
+                                <p className="font-semibold text-[#1a2b49]">{observation.title}</p>
+                                <p className="text-slate-600 mt-0.5">{observation.detail}</p>
+                                {observation.evidence.length > 0 && (
+                                  <ul className="mt-1 space-y-0.5">
+                                    {observation.evidence.map((item, itemIndex) => (
+                                      <li key={itemIndex} className="text-[11px] text-slate-400">
+                                        <span className="font-medium">{item.date}</span> {item.excerpt}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {reflection.encouragement && (
+                          <p className="text-slate-600">{reflection.encouragement}</p>
+                        )}
+
+                        {reflection.nextStep && (
+                          <p className="text-[#4f8ee6] font-medium">
+                            Next step: {reflection.nextStep}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
             {isLoading && (
               <div className="flex gap-2.5 items-start justify-start">

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
-import { and, eq, gte, inArray, lte, lt, asc, desc } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, lt, asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Ollama } from "ollama";
 import { db } from "./db/client.js";
-import { appSettings, journalEntries, journalGoals, localSessions, userProfiles, users } from "./db/schema.js";
+import { appSettings, journalEntries, journalGoals, localSessions, quotes, userProfiles, users } from "./db/schema.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -318,6 +318,47 @@ function calculateCurrentStreak(journalDates: string[], todayKey: string): numbe
   return streak;
 }
 
+function previousDateKey(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+}
+
+function getEntryDatesForUser(userId: string): string[] {
+  return db
+    .select({ entryDate: journalEntries.entryDate })
+    .from(journalEntries)
+    .where(eq(journalEntries.userId, userId))
+    .orderBy(asc(journalEntries.entryDate))
+    .all()
+    .map((row) => row.entryDate);
+}
+
+function getGoalsForEntry(entryId: string): (typeof journalGoals.$inferSelect)[] {
+  return db
+    .select()
+    .from(journalGoals)
+    .where(eq(journalGoals.journalEntryId, entryId))
+    .orderBy(asc(journalGoals.position), asc(journalGoals.createdAt))
+    .all();
+}
+
+function findPreviousGoalBearingEntry(
+  userId: string,
+  beforeDate: string,
+): { id: string; entryDate: string } | null {
+  return (
+    db
+      .select({ id: journalEntries.id, entryDate: journalEntries.entryDate })
+      .from(journalGoals)
+      .innerJoin(journalEntries, eq(journalGoals.journalEntryId, journalEntries.id))
+      .where(and(eq(journalEntries.userId, userId), lt(journalEntries.entryDate, beforeDate)))
+      .groupBy(journalEntries.id, journalEntries.entryDate)
+      .orderBy(desc(journalEntries.entryDate))
+      .limit(1)
+      .all()[0] ?? null
+  );
+}
+
 function toJournalResponse(row: typeof journalEntries.$inferSelect) {
   return {
     id: row.id,
@@ -558,28 +599,16 @@ app.get("/api/journals/:date/goals/previous", async (request, reply) => {
   }
   const entryDate = dateParsed.data;
 
-  const previousEntry = db
-    .select({ id: journalEntries.id, entryDate: journalEntries.entryDate })
-    .from(journalGoals)
-    .innerJoin(journalEntries, eq(journalGoals.journalEntryId, journalEntries.id))
-    .where(and(eq(journalEntries.userId, user.id), lt(journalEntries.entryDate, entryDate)))
-    .groupBy(journalEntries.id, journalEntries.entryDate)
-    .orderBy(desc(journalEntries.entryDate))
-    .limit(1)
-    .all()[0];
+  const previousEntry = findPreviousGoalBearingEntry(user.id, entryDate);
 
   if (!previousEntry) {
     return reply.send({ entryDate: null, goals: [] });
   }
 
-  const goals = db
-    .select()
-    .from(journalGoals)
-    .where(eq(journalGoals.journalEntryId, previousEntry.id))
-    .orderBy(asc(journalGoals.position), asc(journalGoals.createdAt))
-    .all();
-
-  return reply.send({ entryDate: previousEntry.entryDate, goals });
+  return reply.send({
+    entryDate: previousEntry.entryDate,
+    goals: getGoalsForEntry(previousEntry.id),
+  });
 });
 
 app.post("/api/journals/:date/goals", async (request, reply) => {
@@ -895,13 +924,7 @@ function toPlainText(html: string): string {
 }
 
 function buildAiContext(user: typeof users.$inferSelect): AiContext {
-  const allDates = db
-    .select({ entryDate: journalEntries.entryDate })
-    .from(journalEntries)
-    .where(eq(journalEntries.userId, user.id))
-    .orderBy(asc(journalEntries.entryDate))
-    .all()
-    .map((row) => row.entryDate);
+  const allDates = getEntryDatesForUser(user.id);
 
   const currentStreak = calculateCurrentStreak(allDates, toLocalDateKey(new Date()));
 
@@ -1127,7 +1150,18 @@ function extractJsonCandidate(raw: string): string {
   return body.slice(start, end + 1);
 }
 
-function toAiReflection(raw: string, context: AiContext) {
+interface AiReflectionPayload {
+  summary: string;
+  observations: {
+    title: string;
+    detail: string;
+    evidence: { date: string; excerpt: string }[];
+  }[];
+  encouragement: string;
+  nextStep: string;
+}
+
+function toAiReflection(raw: string, context: AiContext): AiReflectionPayload | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(extractJsonCandidate(raw));
@@ -1196,17 +1230,14 @@ const analyzeBody = z.object({
     .max(2000, "Question is too long"),
 });
 
-app.post("/api/ai/analyze", async (request, reply) => {
-  const user = findActiveUser();
-  if (!user) {
-    return reply.code(404).send({ error: "No active user" });
-  }
+type ReflectionOutcome =
+  | { ok: true; reflection: AiReflectionPayload }
+  | { ok: false; status: number; error: string };
 
-  const parsed = analyzeBody.safeParse(request.body);
-  if (!parsed.success) {
-    return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
-  }
-
+async function runReflection(
+  user: typeof users.$inferSelect,
+  question: string,
+): Promise<ReflectionOutcome> {
   const settings = db
     .select({ aiModel: appSettings.aiModel })
     .from(appSettings)
@@ -1219,20 +1250,385 @@ app.post("/api/ai/analyze", async (request, reply) => {
 
   let raw: string;
   try {
-    raw = await requestAiReflection(model, buildAiSystemPrompt(context), parsed.data.question);
+    raw = await requestAiReflection(model, buildAiSystemPrompt(context), question);
   } catch (err) {
     if (err instanceof Error && err.message.toLowerCase().includes("not found")) {
-      return reply.code(503).send({ error: `${model} is not available locally.` });
+      return { ok: false, status: 503, error: `${model} is not available locally.` };
     }
-    return reply.code(503).send({ error: "Ollama is not running." });
+    return { ok: false, status: 503, error: "Ollama is not running." };
   }
 
   const reflection = toAiReflection(raw, context);
   if (reflection === null) {
-    return reply.code(502).send({ error: "DayBook could not complete this reflection." });
+    return { ok: false, status: 502, error: "DayBook could not complete this reflection." };
   }
 
-  return reply.send({ reflection });
+  return { ok: true, reflection };
+}
+
+app.post("/api/ai/analyze", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const parsed = analyzeBody.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+
+  const outcome = await runReflection(user, parsed.data.question);
+  if (!outcome.ok) {
+    return reply.code(outcome.status).send({ error: outcome.error });
+  }
+
+  return reply.send({ reflection: outcome.reflection });
+});
+
+type AiQueryIntent =
+  | "PREVIOUS_GOALS"
+  | "CURRENT_GOALS"
+  | "GOAL_PROGRESS"
+  | "CURRENT_STREAK"
+  | "JOURNAL_COUNT"
+  | "RECENT_JOURNAL"
+  | "REFLECTION"
+  | "DAILY_QUOTE"
+  | "UNSUPPORTED";
+
+interface AiQueryGoal {
+  text: string;
+  completed: boolean;
+}
+
+interface AiQueryAnswerMap {
+  previous_goals: { date: string | null; goals: AiQueryGoal[] };
+  current_goals: { date: string; goals: AiQueryGoal[] };
+  goal_progress: {
+    goalCount: number;
+    completedGoalCount: number;
+    completionRate: number;
+    from: string | null;
+    to: string | null;
+  };
+  current_streak: { currentStreak: number };
+  journal_count: { journalEntryCount: number; from: string | null; to: string | null };
+  recent_journal: { date: string; found: boolean; content: string | null };
+  reflection: AiReflectionPayload;
+  daily_quote: { text: string | null; generatedAt: string | null };
+  unsupported: { reason: string };
+}
+
+type AiQueryResponse<T extends keyof AiQueryAnswerMap = keyof AiQueryAnswerMap> = {
+  [K in keyof AiQueryAnswerMap]: {
+    type: K;
+    answer: AiQueryAnswerMap[K];
+    displayText: string;
+  };
+}[T];
+
+const GOAL_KEYWORDS = ["goal"];
+const JOURNAL_KEYWORDS = ["journal", "entry", "entries", "wrote", "write", "writing", "writings"];
+const COUNT_KEYWORDS = ["how many", "count", "number of", "total"];
+const PROGRESS_KEYWORDS = [
+  "percent",
+  "percentage",
+  "complete",
+  "completed",
+  "finish",
+  "finished",
+  "progress",
+  "how am i doing",
+];
+const TODAY_KEYWORDS = ["today", "current", "right now"];
+const EARLIER_KEYWORDS = ["yesterday", "previous", "last time", "before"];
+const REFLECTION_KEYWORDS = [
+  "pattern",
+  "habit",
+  "improv",
+  "doing",
+  "lately",
+  "feel",
+  "mood",
+  "emotion",
+  "struggl",
+  "reflect",
+  "prompt",
+  "well",
+  "keeps",
+  "getting in",
+  "in my way",
+  "block",
+  "stuck",
+  "noticed",
+  "insight",
+  "proud",
+  "tired",
+  "anxious",
+  "energy",
+  "focus on",
+  "advice",
+];
+
+function normalizeQuestion(question: string): string {
+  return question.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function includesAny(haystack: string, needles: string[]): boolean {
+  return needles.some((needle) => haystack.includes(needle));
+}
+
+function classifyAiIntent(question: string): AiQueryIntent {
+  const q = normalizeQuestion(question);
+
+  if (q.includes("quote")) return "DAILY_QUOTE";
+  if (q.includes("streak")) return "CURRENT_STREAK";
+
+  if (includesAny(q, GOAL_KEYWORDS)) {
+    if (includesAny(q, EARLIER_KEYWORDS)) return "PREVIOUS_GOALS";
+    if (includesAny(q, COUNT_KEYWORDS) || includesAny(q, PROGRESS_KEYWORDS)) return "GOAL_PROGRESS";
+    if (includesAny(q, TODAY_KEYWORDS)) return "CURRENT_GOALS";
+    return "GOAL_PROGRESS";
+  }
+
+  if (includesAny(q, JOURNAL_KEYWORDS)) {
+    if (includesAny(q, COUNT_KEYWORDS)) return "JOURNAL_COUNT";
+    return "RECENT_JOURNAL";
+  }
+
+  if (includesAny(q, REFLECTION_KEYWORDS)) return "REFLECTION";
+
+  return "UNSUPPORTED";
+}
+
+function formatGoalLines(goals: AiQueryGoal[]): string {
+  return goals.map((goal) => `• ${goal.text} (${goal.completed ? "completed" : "not completed"})`).join("\n");
+}
+
+const queryBody = z.object({
+  question: z
+    .string()
+    .trim()
+    .min(1, "Question must not be empty")
+    .max(2000, "Question is too long"),
+  selectedJournalDate: z
+    .string()
+    .refine(isValidJournalDate, "Invalid date, expected YYYY-MM-DD")
+    .optional(),
+});
+
+app.post("/api/ai/query", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const parsed = queryBody.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+
+  const question = parsed.data.question;
+  const referenceDate = parsed.data.selectedJournalDate ?? toLocalDateKey(new Date());
+  const intent = classifyAiIntent(question);
+
+  if (intent === "REFLECTION") {
+    const outcome = await runReflection(user, question);
+    if (!outcome.ok) {
+      return reply.code(outcome.status).send({ error: outcome.error });
+    }
+    const response: AiQueryResponse<"reflection"> = {
+      type: "reflection",
+      answer: outcome.reflection,
+      displayText: outcome.reflection.summary,
+    };
+    return reply.send(response);
+  }
+
+  try {
+    if (intent === "PREVIOUS_GOALS") {
+      const previousEntry = findPreviousGoalBearingEntry(user.id, referenceDate);
+      const answer: AiQueryAnswerMap["previous_goals"] =
+        previousEntry === null
+          ? { date: null, goals: [] }
+          : {
+              date: previousEntry.entryDate,
+              goals: getGoalsForEntry(previousEntry.id).map((goal) => ({
+                text: goal.text,
+                completed: goal.completed,
+              })),
+            };
+      const response: AiQueryResponse<"previous_goals"> = {
+        type: "previous_goals",
+        answer,
+        displayText:
+          answer.date === null
+            ? "You do not have an earlier journal day with goals yet."
+            : `Your previous goal day was ${answer.date}.\n\n${formatGoalLines(answer.goals)}`,
+      };
+      return reply.send(response);
+    }
+
+    if (intent === "CURRENT_GOALS") {
+      const entry = db
+        .select({ id: journalEntries.id })
+        .from(journalEntries)
+        .where(and(eq(journalEntries.userId, user.id), eq(journalEntries.entryDate, referenceDate)))
+        .limit(1)
+        .all()[0];
+      const goals = entry === undefined ? [] : getGoalsForEntry(entry.id);
+      const answer: AiQueryAnswerMap["current_goals"] = {
+        date: referenceDate,
+        goals: goals.map((goal) => ({ text: goal.text, completed: goal.completed })),
+      };
+      const response: AiQueryResponse<"current_goals"> = {
+        type: "current_goals",
+        answer,
+        displayText:
+          answer.goals.length === 0
+            ? `You have no goals listed for ${answer.date}.`
+            : `Your goals for ${answer.date}:\n\n${formatGoalLines(answer.goals)}`,
+      };
+      return reply.send(response);
+    }
+
+    if (intent === "GOAL_PROGRESS") {
+      const totals = db
+        .select({
+          goalCount: sql<number>`count(*)`,
+          completedCount: sql<number>`sum(case when ${journalGoals.completed} = 1 then 1 else 0 end)`,
+        })
+        .from(journalGoals)
+        .innerJoin(journalEntries, eq(journalGoals.journalEntryId, journalEntries.id))
+        .where(eq(journalEntries.userId, user.id))
+        .all()[0];
+      const goalCount = totals?.goalCount ?? 0;
+      const completedGoalCount = totals?.completedCount ?? 0;
+      const dates = getEntryDatesForUser(user.id);
+      const answer: AiQueryAnswerMap["goal_progress"] = {
+        goalCount,
+        completedGoalCount,
+        completionRate: goalCount > 0 ? Math.round((completedGoalCount / goalCount) * 100) : 0,
+        from: dates[0] ?? null,
+        to: dates[dates.length - 1] ?? null,
+      };
+      const response: AiQueryResponse<"goal_progress"> = {
+        type: "goal_progress",
+        answer,
+        displayText:
+          goalCount === 0
+            ? "You have not set any goals yet."
+            : `You have completed ${completedGoalCount} of ${goalCount} goals, which is ${answer.completionRate}%.`,
+      };
+      return reply.send(response);
+    }
+
+    if (intent === "CURRENT_STREAK") {
+      const streak = calculateCurrentStreak(getEntryDatesForUser(user.id), toLocalDateKey(new Date()));
+      const answer: AiQueryAnswerMap["current_streak"] = { currentStreak: streak };
+      const response: AiQueryResponse<"current_streak"> = {
+        type: "current_streak",
+        answer,
+        displayText:
+          streak === 1
+            ? "You are currently on a 1 day journaling streak."
+            : `You are currently on a ${streak} day journaling streak.`,
+      };
+      return reply.send(response);
+    }
+
+    if (intent === "JOURNAL_COUNT") {
+      const dates = getEntryDatesForUser(user.id);
+      const answer: AiQueryAnswerMap["journal_count"] = {
+        journalEntryCount: dates.length,
+        from: dates[0] ?? null,
+        to: dates[dates.length - 1] ?? null,
+      };
+      const response: AiQueryResponse<"journal_count"> = {
+        type: "journal_count",
+        answer,
+        displayText:
+          answer.journalEntryCount === 0
+            ? "You have not written any journal entries yet."
+            : `You have ${answer.journalEntryCount} journal entries, from ${answer.from} to ${answer.to}.`,
+      };
+      return reply.send(response);
+    }
+
+    if (intent === "RECENT_JOURNAL") {
+      const normalized = normalizeQuestion(question);
+      const wantsYesterday = normalized.includes("yesterday");
+      const entry = wantsYesterday
+        ? db
+            .select()
+            .from(journalEntries)
+            .where(
+              and(
+                eq(journalEntries.userId, user.id),
+                eq(journalEntries.entryDate, previousDateKey(referenceDate)),
+              ),
+            )
+            .limit(1)
+            .all()[0]
+        : db
+            .select()
+            .from(journalEntries)
+            .where(
+              and(
+                eq(journalEntries.userId, user.id),
+                lte(journalEntries.entryDate, referenceDate),
+              ),
+            )
+            .orderBy(desc(journalEntries.entryDate))
+            .limit(1)
+            .all()[0];
+      const targetDate = entry?.entryDate ?? previousDateKey(referenceDate);
+      const answer: AiQueryAnswerMap["recent_journal"] = {
+        date: targetDate,
+        found: entry !== undefined,
+        content: entry === undefined ? null : toPlainText(entry.content),
+      };
+      const response: AiQueryResponse<"recent_journal"> = {
+        type: "recent_journal",
+        answer,
+        displayText:
+          answer.content === null || answer.content === ""
+            ? `No journal entry was found for ${answer.date}.`
+            : `Here is what you wrote on ${answer.date}:\n\n${answer.content}`,
+      };
+      return reply.send(response);
+    }
+
+    if (intent === "DAILY_QUOTE") {
+      const quote = db
+        .select({ text: quotes.text, generatedAt: quotes.generatedAt })
+        .from(quotes)
+        .where(eq(quotes.userId, user.id))
+        .orderBy(desc(quotes.generatedAt))
+        .limit(1)
+        .all()[0];
+      const answer: AiQueryAnswerMap["daily_quote"] = {
+        text: quote?.text ?? null,
+        generatedAt: quote?.generatedAt ?? null,
+      };
+      const response: AiQueryResponse<"daily_quote"> = {
+        type: "daily_quote",
+        answer,
+        displayText: answer.text === null ? "No daily quote is available yet." : answer.text,
+      };
+      return reply.send(response);
+    }
+
+    const answer: AiQueryAnswerMap["unsupported"] = { reason: "outside_daybook_scope" };
+    const response: AiQueryResponse<"unsupported"> = {
+      type: "unsupported",
+      answer,
+      displayText: "DayBook AI is focused on reflecting on your journal, goals, and progress.",
+    };
+    return reply.send(response);
+  } catch {
+    return reply.code(500).send({ error: "Could not read your journal data." });
+  }
 });
 
 app.listen({ port: PORT, host: "127.0.0.1" }).then(() => {
