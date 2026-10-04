@@ -31,7 +31,14 @@ export interface UserProfile {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
   if (!res.ok) {
-    throw new Error(`DayBook API request failed: ${res.status} ${res.statusText}`)
+    let detail = ''
+    try {
+      const body = (await res.json()) as { error?: unknown }
+      if (typeof body?.error === 'string') detail = body.error
+    } catch (e) {
+      void e
+    }
+    throw new Error(detail || `DayBook API request failed: ${res.status} ${res.statusText}`)
   }
   return (await res.json()) as T
 }
@@ -213,5 +220,33 @@ export async function getCurrentStreak(): Promise<StreakResponse> {
     throw new Error(`Failed to load streak: ${res.status} ${res.statusText}`)
   }
   return (await res.json()) as StreakResponse
+}
+
+export interface AiEvidence {
+  date: string
+  excerpt: string
+}
+
+export interface AiObservation {
+  title: string
+  detail: string
+  evidence: AiEvidence[]
+}
+
+export interface AiReflection {
+  summary: string
+  observations: AiObservation[]
+  encouragement: string
+  nextStep: string
+}
+
+export async function analyzeWithAI(question: string, signal?: AbortSignal): Promise<AiReflection> {
+  const data = await request<{ reflection: AiReflection }>('/api/ai/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+    signal,
+  })
+  return data.reflection
 }
 

@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { ArrowUp, Loader2, RotateCcw, Bot } from 'lucide-react'
+import { analyzeWithAI, type AiReflection } from '../lib/api'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  reflection?: AiReflection
+  isError?: boolean
 }
 
 const suggestions = [
@@ -14,26 +17,6 @@ const suggestions = [
   'Give me a thought-provoking prompt for today',
 ]
 
-function getLocalFallbackReflection(prompt: string, mood: string, entry: string): string {
-  const p = prompt.toLowerCase()
-  if (p.includes('mood') || p.includes('feel')) {
-    return `Your recorded mood is currently "${mood}". When reviewing your entries, acknowledging how you feel without judgment is the first step toward understanding emotional rhythms. Consider writing about what specific moment today contributed most to feeling ${mood.toLowerCase()}.`
-  }
-  if (p.includes('pattern') || p.includes('habit')) {
-    if (entry.trim().length > 0) {
-      return `Looking across your journal entries, recurring reflections often center around balance, focus, and small daily milestones. Noticing what triggers energy versus fatigue over several entries helps clarify what routines truly support you.`
-    }
-    return `As you write more daily entries, DayBook tracks recurring themes in your routines, energy levels, and reflections. Try writing today's entry to let the local model surface emerging patterns.`
-  }
-  if (p.includes('prompt') || p.includes('question')) {
-    return `Here is a gentle reflection prompt for you: "What is one small thing that brought you unexpected peace or clarity today, and how can you invite more of it into tomorrow?"`
-  }
-  if (entry.trim().length > 0) {
-    return `Thank you for sharing your reflections. DayBook has noted your thoughts and current mood of "${mood}". A healthy journaling practice is not about writing perfectly, but about giving your thoughts an honest place to land and discovering what matters most to you over time.`
-  }
-  return `DayBook is ready to analyze your journal. Start by writing your daily thoughts in the Book tab, and then ask questions here anytime to discover personal insights and habits.`
-}
-
 export function AnalyticsAIView() {
   const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
@@ -41,9 +24,8 @@ export function AnalyticsAIView() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const idCounterRef = useRef(0)
-  const [selectedModel, setSelectedModel] = useState(() => {
-    return localStorage.getItem('daybook_ai_model') || 'gemma3:4b'
-  })
+  const abortRef = useRef<AbortController | null>(null)
+  const requestIdRef = useRef(0)
 
   function nextId() {
     idCounterRef.current += 1
@@ -51,14 +33,8 @@ export function AnalyticsAIView() {
   }
 
   useEffect(() => {
-    function handleModelChanged() {
-      setSelectedModel(localStorage.getItem('daybook_ai_model') || 'gemma3:4b')
-    }
-    window.addEventListener('daybook_model_changed', handleModelChanged)
-    window.addEventListener('storage', handleModelChanged)
     return () => {
-      window.removeEventListener('daybook_model_changed', handleModelChanged)
-      window.removeEventListener('storage', handleModelChanged)
+      abortRef.current?.abort()
     }
   }, [])
 
@@ -80,53 +56,38 @@ export function AnalyticsAIView() {
     setPrompt('')
     setIsLoading(true)
 
-    const mood = localStorage.getItem('daybook_journal_mood') || 'Peaceful'
-    const entry = localStorage.getItem('daybook_journal_entry') || ''
-    const goals = localStorage.getItem('daybook_journal_goals') || '[]'
-
-    const systemPrompt = `You are DayBook AI, a private, compassionate journal assistant powered by local Gemma 3:4B.
-The user is asking: "${text}"
-Current journal context:
-- Mood: ${mood}
-- Current Entry: "${entry || 'No entry written yet today.'}"
-- Goals: "${goals}"
-
-Provide a concise, thoughtful, and encouraging reflection or answer. Keep it personal, insightful, and natural without fluff.`
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const requestId = ++requestIdRef.current
 
     try {
-      const response = await fetch('/api/ollama/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: selectedModel,
-          prompt: systemPrompt,
-          stream: false,
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data && typeof data.response === 'string' && data.response.trim().length > 0) {
-          const assistantMessage: Message = {
-            id: nextId(),
-            role: 'assistant',
-            content: data.response.trim(),
-          }
-          setMessages((prev) => [...prev, assistantMessage])
-          setIsLoading(false)
-          return
-        }
-      }
-      throw new Error('Local model response empty')
-    } catch {
-      const fallbackText = getLocalFallbackReflection(text, mood, entry)
+      const reflection = await analyzeWithAI(text, controller.signal)
+      if (requestId !== requestIdRef.current) return
       const assistantMessage: Message = {
         id: nextId(),
         role: 'assistant',
-        content: fallbackText,
+        content: reflection.summary,
+        reflection,
       }
       setMessages((prev) => [...prev, assistantMessage])
-      setIsLoading(false)
+    } catch (err) {
+      if (requestId !== requestIdRef.current || controller.signal.aborted) return
+      const assistantMessage: Message = {
+        id: nextId(),
+        role: 'assistant',
+        content:
+          err instanceof Error
+            ? err.message
+            : 'DayBook could not complete this reflection.',
+        isError: true,
+      }
+      setMessages((prev) => [...prev, assistantMessage])
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false)
+        abortRef.current = null
+      }
     }
   }
 
@@ -191,13 +152,51 @@ Provide a concise, thoughtful, and encouraging reflection or answer. Keep it per
                   </div>
                 )}
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap select-text ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed select-text ${
                     msg.role === 'user'
-                      ? 'bg-[#1a2b49] text-white rounded-br-xs shadow-xs'
-                      : 'bg-[#FAF9F5] border border-slate-100 text-slate-700 rounded-bl-xs'
+                      ? 'bg-[#1a2b49] text-white rounded-br-xs shadow-xs whitespace-pre-wrap'
+                      : msg.isError
+                        ? 'bg-rose-50 border border-rose-200/70 text-rose-800 rounded-bl-xs'
+                        : 'bg-[#FAF9F5] border border-slate-100 text-slate-700 rounded-bl-xs'
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === 'user' || !msg.reflection ? (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                  ) : (
+                    <div className="space-y-2.5">
+                      <p className="whitespace-pre-wrap">{msg.reflection.summary}</p>
+
+                      {msg.reflection.observations.length > 0 && (
+                        <ul className="space-y-2 pt-0.5">
+                          {msg.reflection.observations.map((observation, index) => (
+                            <li key={index} className="border-l-2 border-[#6eafe9]/40 pl-2.5">
+                              <p className="font-semibold text-[#1a2b49]">{observation.title}</p>
+                              <p className="text-slate-600 mt-0.5">{observation.detail}</p>
+                              {observation.evidence.length > 0 && (
+                                <ul className="mt-1 space-y-0.5">
+                                  {observation.evidence.map((item, itemIndex) => (
+                                    <li key={itemIndex} className="text-[11px] text-slate-400">
+                                      <span className="font-medium">{item.date}</span> {item.excerpt}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {msg.reflection.encouragement && (
+                        <p className="text-slate-600">{msg.reflection.encouragement}</p>
+                      )}
+
+                      {msg.reflection.nextStep && (
+                        <p className="text-[#4f8ee6] font-medium">
+                          Next step: {msg.reflection.nextStep}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -249,7 +248,7 @@ Provide a concise, thoughtful, and encouraging reflection or answer. Keep it per
           </button>
         </div>
         <p className="text-[11px] sm:text-xs text-center text-slate-400 mt-2 font-medium tracking-wide select-none">
-          Powered by {selectedModel === 'gemma3:4b' ? 'Gemma 3:4B' : selectedModel}
+          Powered by Gemma 3:4B. Reflections run locally with Ollama.
         </p>
       </div>
     </div>
