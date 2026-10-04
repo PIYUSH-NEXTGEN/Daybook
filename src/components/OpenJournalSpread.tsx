@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Sun,
   Cloud,
@@ -84,6 +84,7 @@ export function OpenJournalSpread({
   const [entryHtml, setEntryHtml] = useState('')
   const [entryText, setEntryText] = useState('')
   const [locationText, setLocationText] = useState('')
+  const [syncedJournal, setSyncedJournal] = useState<Journal | null | undefined>(undefined)
 
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -107,20 +108,19 @@ export function OpenJournalSpread({
     hour12: true
   })
 
-  useEffect(() => {
-    if (isLoading) return
-    if (journal) {
-      setEntryHtml(journal.content || '')
+  const journalToSync = isLoading ? undefined : journal
+
+  if (journalToSync !== syncedJournal) {
+    setSyncedJournal(journalToSync)
+    if (journalToSync) {
+      setEntryHtml(journalToSync.content || '')
       const tmp = document.createElement('div')
-      tmp.innerHTML = journal.content || ''
+      tmp.innerHTML = journalToSync.content || ''
       setEntryText(tmp.innerText || '')
-      setTopic(journal.topic || '')
-      setSelectedMood(journal.mood || 'Peaceful')
-      setWeather((journal.weather as WeatherType) || 'sunny')
-      setLocationText(journal.locationText || '')
-      if (editorRef.current) {
-        editorRef.current.innerHTML = journal.content || ''
-      }
+      setTopic(journalToSync.topic || '')
+      setSelectedMood(journalToSync.mood || 'Peaceful')
+      setWeather((journalToSync.weather as WeatherType) || 'sunny')
+      setLocationText(journalToSync.locationText || '')
     } else {
       setEntryHtml('')
       setEntryText('')
@@ -128,11 +128,14 @@ export function OpenJournalSpread({
       setSelectedMood('Peaceful')
       setWeather('sunny')
       setLocationText('')
-      if (editorRef.current) {
-        editorRef.current.innerHTML = ''
-      }
     }
-  }, [journal, entryDate, isLoading])
+  }
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = syncedJournal?.content || ''
+    }
+  }, [syncedJournal])
 
   useEffect(() => {
     let cancelled = false
@@ -173,13 +176,13 @@ export function OpenJournalSpread({
     return () => window.removeEventListener('daybook_goals_updated', handleGoalsUpdated)
   }, [entryDate])
 
-  function handleInput() {
+  const handleInput = useCallback(() => {
     if (!editorRef.current) return
     const html = editorRef.current.innerHTML
     const text = editorRef.current.innerText || ''
     setEntryHtml(html)
     setEntryText(text)
-  }
+  }, [])
 
   function handleEditorPaste(e: React.ClipboardEvent<HTMLDivElement>) {
     e.preventDefault()
@@ -188,7 +191,7 @@ export function OpenJournalSpread({
     handleInput()
   }
 
-  function expandRangeToWord(range: Range) {
+  const expandRangeToWord = useCallback((range: Range) => {
     const node = range.startContainer
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent || ''
@@ -210,9 +213,9 @@ export function OpenJournalSpread({
         sel?.addRange(range)
       }
     }
-  }
+  }, [])
 
-  function updateToolbarFromSelection() {
+  const updateToolbarFromSelection = useCallback(() => {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
     const node = selection.anchorNode
@@ -278,9 +281,9 @@ export function OpenJournalSpread({
         }
       })
     )
-  }
+  }, [])
 
-  function ensureEditorFocus() {
+  const ensureEditorFocus = useCallback(() => {
     if (!editorRef.current) return
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0 || !editorRef.current.contains(selection.anchorNode)) {
@@ -294,9 +297,9 @@ export function OpenJournalSpread({
         sel.addRange(range)
       }
     }
-  }
+  }, [])
 
-  function toggleInlineFormat(command: 'bold' | 'italic' | 'underline') {
+  const toggleInlineFormat = useCallback((command: 'bold' | 'italic' | 'underline') => {
     ensureEditorFocus()
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
@@ -370,7 +373,7 @@ export function OpenJournalSpread({
 
     handleInput()
     updateToolbarFromSelection()
-  }
+  }, [ensureEditorFocus, expandRangeToWord, handleInput, updateToolbarFromSelection])
 
   function handleEditorKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.ctrlKey || e.metaKey) {
@@ -388,7 +391,7 @@ export function OpenJournalSpread({
     }
   }
 
-  function applyInlineStyle(styleUpdater: (span: HTMLElement) => void) {
+  const applyInlineStyle = useCallback((styleUpdater: (span: HTMLElement) => void) => {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
     let range = selection.getRangeAt(0)
@@ -424,9 +427,9 @@ export function OpenJournalSpread({
 
     handleInput()
     updateToolbarFromSelection()
-  }
+  }, [expandRangeToWord, handleInput, updateToolbarFromSelection])
 
-  function resetSelectionFormatting() {
+  const resetSelectionFormatting = useCallback(() => {
     ensureEditorFocus()
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
@@ -437,7 +440,7 @@ export function OpenJournalSpread({
     document.execCommand('removeFormat', false)
     handleInput()
     updateToolbarFromSelection()
-  }
+  }, [ensureEditorFocus, expandRangeToWord, handleInput, updateToolbarFromSelection])
 
   useEffect(() => {
     function handleJournalFormat(e: Event) {
@@ -482,9 +485,7 @@ export function OpenJournalSpread({
 
     window.addEventListener('journal-format', handleJournalFormat)
     return () => window.removeEventListener('journal-format', handleJournalFormat)
-  }, [])
-
-  
+  }, [applyInlineStyle, handleInput, resetSelectionFormatting, toggleInlineFormat])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

@@ -179,6 +179,29 @@ function renderTimeIcon(phase: TimePhase) {
   )
 }
 
+interface JournalState {
+  date: string
+  journal: Journal | null
+  error: string | null
+  saveState: 'idle' | 'saving' | 'saved' | 'error'
+  saveError: string | null
+}
+
+interface JournalDatesState {
+  userId: string
+  dates: string[]
+}
+
+const INITIAL_JOURNAL_STATE: JournalState = {
+  date: '',
+  journal: null,
+  error: null,
+  saveState: 'idle',
+  saveError: null,
+}
+
+const NO_JOURNAL_DATES: string[] = []
+
 function App() {
   const [activePage, setActivePage] = useState<NavItem>('Home')
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('Book')
@@ -205,13 +228,20 @@ function App() {
     return defaultTextStyle
   })
   const [selectedJournalDate, setSelectedJournalDate] = useState<string>(() => toDateKey(new Date()))
-  const [journal, setJournal] = useState<Journal | null>(null)
-  const [journalLoading, setJournalLoading] = useState(false)
-  const [journalError, setJournalError] = useState<string | null>(null)
-  const [journalSaveState, setJournalSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [journalSaveError, setJournalSaveError] = useState<string | null>(null)
-  const [journalDates, setJournalDates] = useState<string[]>([])
+  const [journalState, setJournalState] = useState<JournalState>(INITIAL_JOURNAL_STATE)
+  const [journalDatesState, setJournalDatesState] = useState<JournalDatesState | null>(null)
   const journalFetchIdRef = useRef(0)
+
+  const isJournalLoaded = journalState.date === selectedJournalDate
+  const journal = isJournalLoaded ? journalState.journal : null
+  const journalError = isJournalLoaded ? journalState.error : null
+  const journalSaveState = isJournalLoaded ? journalState.saveState : 'idle'
+  const journalSaveError = isJournalLoaded ? journalState.saveError : null
+  const journalLoading = currentUser !== null && !isCheckingUser && !isJournalLoaded
+  const journalDates =
+    currentUser !== null && journalDatesState?.userId === currentUser.id
+      ? journalDatesState.dates
+      : NO_JOURNAL_DATES
 
   const userMenuRef = useRef<HTMLDivElement>(null)
   const openingFromAboutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -405,7 +435,6 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // eslint-disable react-hooks/set-state-in-effect -- intentional sync state reset on date/user change; guarded and not a cascading render loop
     let cancelled = false
 
     getCurrentUser()
@@ -449,7 +478,6 @@ function App() {
       cancelled = true
     }
   }, [])
-  // eslint-enable react-hooks/set-state-in-effect
 
   function handleUserCreated(user: LocalUser) {
     try {
@@ -480,59 +508,62 @@ function App() {
   }
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- intentional sync state reset on date/user change; guarded and not a cascading render loop */
     if (!currentUser || isCheckingUser) return
 
     const fetchId = ++journalFetchIdRef.current
-    setJournalLoading(true)
-    setJournalError(null)
-    setJournal(null)
-    setJournalSaveState('idle')
-    setJournalSaveError(null)
-
     const controller = new AbortController()
+
     getJournal(selectedJournalDate)
       .then((result) => {
         if (fetchId !== journalFetchIdRef.current || controller.signal.aborted) return
-        setJournal(result)
+        setJournalState({
+          date: selectedJournalDate,
+          journal: result,
+          error: null,
+          saveState: 'idle',
+          saveError: null,
+        })
       })
       .catch((err) => {
         if (fetchId !== journalFetchIdRef.current || controller.signal.aborted) return
         if (err instanceof DOMException && err.name === 'AbortError') return
-        setJournalError(err instanceof Error ? err.message : 'Failed to load journal')
-      })
-      .finally(() => {
-        if (fetchId !== journalFetchIdRef.current || controller.signal.aborted) return
-        setJournalLoading(false)
+        setJournalState({
+          date: selectedJournalDate,
+          journal: null,
+          error: err instanceof Error ? err.message : 'Failed to load journal',
+          saveState: 'idle',
+          saveError: null,
+        })
       })
 
     return () => {
       controller.abort()
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [selectedJournalDate, currentUser, isCheckingUser])
 
   useEffect(() => {
-    // eslint-disable react-hooks/set-state-in-effect -- intentional sync state reset on date/user change; guarded and not a cascading render loop
-    if (!currentUser || isCheckingUser) {
-      setJournalDates([])
-      return
-    }
+    if (!currentUser || isCheckingUser) return
+
+    let cancelled = false
     const from = `${new Date().getFullYear()}-01-01`
     const to = `${new Date().getFullYear() + 1}-12-31`
     getJournalDates(from, to)
-      .then(setJournalDates)
+      .then((dates) => {
+        if (!cancelled) setJournalDatesState({ userId: currentUser.id, dates })
+      })
       .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
   }, [currentUser, isCheckingUser, journal?.updatedAt])
-  // eslint-enable react-hooks/set-state-in-effect
 
   const handleSaveJournal = async (input: SaveJournalInput) => {
     if (!currentUser || journalLoading) {
       throw new Error('Cannot save while loading')
     }
     const dateToSave = selectedJournalDate
-    setJournalSaveState('saving')
-    setJournalSaveError(null)
+    setJournalState((prev) => ({ ...prev, saveState: 'saving', saveError: null }))
     try {
       const saved = await saveJournal(dateToSave, {
         content: input.content,
@@ -544,25 +575,33 @@ function App() {
       if (dateToSave !== selectedJournalDate) {
         return saved
       }
-      setJournal(saved)
-      setJournalSaveState('saved')
-      setJournalDates((prev) => (prev.includes(saved.entryDate) ? prev : [...prev, saved.entryDate].sort()))
-      setTimeout(() => setJournalSaveState('idle'), 2000)
+      setJournalState((prev) => ({ ...prev, journal: saved, saveState: 'saved' }))
+      setJournalDatesState((prev) =>
+        prev === null || prev.dates.includes(saved.entryDate)
+          ? prev
+          : { userId: prev.userId, dates: [...prev.dates, saved.entryDate].sort() }
+      )
+      setTimeout(() => {
+        setJournalState((prev) => ({ ...prev, saveState: 'idle' }))
+      }, 2000)
       return saved
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to save journal'
-      setJournalSaveState('error')
-      setJournalSaveError(msg)
+      setJournalState((prev) => ({ ...prev, saveState: 'error', saveError: msg }))
       throw err
     }
   }
 
   const handleDeleteJournal = async () => {
     if (!currentUser) return
-    await deleteJournal(selectedJournalDate)
-    setJournal(null)
-    setJournalDates((prev) => prev.filter((d) => d !== selectedJournalDate))
-    setJournalSaveState('idle')
+    const dateToDelete = selectedJournalDate
+    await deleteJournal(dateToDelete)
+    setJournalState((prev) => ({ ...prev, journal: null, saveState: 'idle' }))
+    setJournalDatesState((prev) =>
+      prev === null
+        ? prev
+        : { userId: prev.userId, dates: prev.dates.filter((d) => d !== dateToDelete) }
+    )
   }
 
   const handleSelectJournalDate = (dateKey: string) => {
