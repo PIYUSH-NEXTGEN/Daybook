@@ -18,44 +18,54 @@ import {
 } from 'lucide-react'
 import defaultPhoto from '../assets/images/scene.webp'
 import type { JournalTextStyle } from './journalTextStyle'
+import type { Journal, SaveJournalInput, JournalGoal } from '../lib/api'
+import {
+  createJournalGoal,
+  deleteJournalGoal,
+  getJournalGoals,
+  updateJournalGoal,
+} from '../lib/api'
 
 type WeatherType = 'sunny' | 'partlyCloudy' | 'rainy' | 'windy' | 'snowy'
-
-interface GoalItem {
-  id: string
-  text: string
-  completed: boolean
-}
 
 interface OpenJournalSpreadProps {
   onClose?: () => void
   className?: string
   textStyle?: JournalTextStyle
+  entryDate?: string
+  journal?: Journal | null
+  isLoading?: boolean
+  error?: string | null
+  saveState?: 'idle' | 'saving' | 'saved' | 'error'
+  saveError?: string | null
+  onSave?: (input: SaveJournalInput) => Promise<Journal>
+  onDelete?: () => Promise<void>
 }
 
 export function OpenJournalSpread({
   className = '',
-  textStyle
+  textStyle,
+  entryDate,
+  journal,
+  isLoading,
+  error,
+  saveState,
+  saveError,
+  onSave,
+  onDelete,
 }: OpenJournalSpreadProps) {
   const [weather, setWeather] = useState<WeatherType>('sunny')
   const [isWeatherPickerOpen, setIsWeatherPickerOpen] = useState(false)
   const [photoUrl, setPhotoUrl] = useState<string>(defaultPhoto)
   const [topic, setTopic] = useState('')
   const [isEditingTopic, setIsEditingTopic] = useState(false)
-  const [selectedMood, setSelectedMood] = useState<string>(() => {
-    return localStorage.getItem('daybook_journal_mood') || 'Peaceful'
-  })
-  const [goals, setGoals] = useState<GoalItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('daybook_journal_goals')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {
-      void e
-    }
-    return []
-  })
+  const [selectedMood, setSelectedMood] = useState<string>('Peaceful')
+  const [goals, setGoals] = useState<JournalGoal[]>([])
   const [newGoalText, setNewGoalText] = useState('')
   const [isAddingGoal, setIsAddingGoal] = useState(false)
+  const [isSavingGoal, setIsSavingGoal] = useState(false)
+  const [goalError, setGoalError] = useState<string | null>(null)
+  const [goalsRefreshToken, setGoalsRefreshToken] = useState(0)
   const [isCopied, setIsCopied] = useState(false)
   const [isFavorited, setIsFavorited] = useState(() => {
     try {
@@ -71,42 +81,97 @@ export function OpenJournalSpread({
     }
     return true
   })
-  const [entryHtml, setEntryHtml] = useState(() => {
-    return (
-      localStorage.getItem('daybook_journal_entry_html') ||
-      localStorage.getItem('daybook_journal_entry') ||
-      ''
-    )
-  })
-  const [entryText, setEntryText] = useState(() => {
-    return localStorage.getItem('daybook_journal_entry') || ''
-  })
-  const [locationText, setLocationText] = useState(() => {
-    return localStorage.getItem('daybook_journal_location') || ''
-  })
+  const [entryHtml, setEntryHtml] = useState('')
+  const [entryText, setEntryText] = useState('')
+  const [locationText, setLocationText] = useState('')
 
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const weatherDropdownRef = useRef<HTMLDivElement>(null)
 
-  const currentDate = new Date()
-  const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' })
-  const formattedDate = currentDate.toLocaleDateString('en-US', {
+  const displayDate = entryDate
+    ? (() => {
+        const [y, m, d] = entryDate.split('-').map(Number)
+        return new Date(y, m - 1, d)
+      })()
+    : new Date()
+  const dayName = displayDate.toLocaleDateString('en-US', { weekday: 'long' })
+  const formattedDate = displayDate.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric'
   })
-  const currentTimeString = currentDate.toLocaleTimeString('en-US', {
+  const currentTimeString = displayDate.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true
   })
 
   useEffect(() => {
-    if (editorRef.current && !editorRef.current.innerHTML && entryHtml) {
-      editorRef.current.innerHTML = entryHtml
+    if (isLoading) return
+    if (journal) {
+      setEntryHtml(journal.content || '')
+      const tmp = document.createElement('div')
+      tmp.innerHTML = journal.content || ''
+      setEntryText(tmp.innerText || '')
+      setTopic(journal.topic || '')
+      setSelectedMood(journal.mood || 'Peaceful')
+      setWeather((journal.weather as WeatherType) || 'sunny')
+      setLocationText(journal.locationText || '')
+      if (editorRef.current) {
+        editorRef.current.innerHTML = journal.content || ''
+      }
+    } else {
+      setEntryHtml('')
+      setEntryText('')
+      setTopic('')
+      setSelectedMood('Peaceful')
+      setWeather('sunny')
+      setLocationText('')
+      if (editorRef.current) {
+        editorRef.current.innerHTML = ''
+      }
     }
-  }, [])
+  }, [journal, entryDate, isLoading])
+
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      if (!entryDate) {
+        setGoals([])
+        return
+      }
+
+      try {
+        const data = await getJournalGoals(entryDate)
+        if (!cancelled) {
+          setGoals(data.goals)
+          setGoalError(null)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setGoals([])
+          setGoalError(err instanceof Error ? err.message : 'Failed to load goals')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [entryDate, goalsRefreshToken])
+
+  useEffect(() => {
+    const handleGoalsUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<{ entryDate?: string }>).detail
+      if (detail?.entryDate && entryDate && detail.entryDate !== entryDate) return
+      setGoalsRefreshToken((token) => token + 1)
+    }
+
+    window.addEventListener('daybook_goals_updated', handleGoalsUpdated)
+    return () => window.removeEventListener('daybook_goals_updated', handleGoalsUpdated)
+  }, [entryDate])
 
   function handleInput() {
     if (!editorRef.current) return
@@ -114,8 +179,6 @@ export function OpenJournalSpread({
     const text = editorRef.current.innerText || ''
     setEntryHtml(html)
     setEntryText(text)
-    localStorage.setItem('daybook_journal_entry_html', html)
-    localStorage.setItem('daybook_journal_entry', text)
   }
 
   function handleEditorPaste(e: React.ClipboardEvent<HTMLDivElement>) {
@@ -421,21 +484,7 @@ export function OpenJournalSpread({
     return () => window.removeEventListener('journal-format', handleJournalFormat)
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem('daybook_journal_location', locationText)
-  }, [locationText])
-
-  useEffect(() => {
-    localStorage.setItem('daybook_journal_mood', selectedMood)
-  }, [selectedMood])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('daybook_journal_goals', JSON.stringify(goals))
-    } catch (e) {
-      void e
-    }
-  }, [goals])
+  
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -487,24 +536,60 @@ export function OpenJournalSpread({
     }
   }
 
+  function notifyGoalsUpdated() {
+    if (!entryDate) return
+    window.dispatchEvent(new CustomEvent('daybook_goals_updated', { detail: { entryDate } }))
+  }
+
   function toggleGoal(id: string) {
-    setGoals((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g))
-    )
+    if (!entryDate) return
+    ;(async () => {
+      try {
+        const updated = await updateJournalGoal(entryDate, id, {
+          completed: !goals.find((g) => g.id === id)?.completed,
+        })
+        setGoals((prev) => prev.map((g) => (g.id === id ? updated : g)))
+        setGoalError(null)
+        notifyGoalsUpdated()
+      } catch (err) {
+        setGoalError(err instanceof Error ? err.message : 'Failed to update goal')
+      }
+    })()
   }
 
   function addGoal() {
-    if (!newGoalText.trim()) return
-    setGoals((prev) => [
-      ...prev,
-      { id: Date.now().toString(), text: newGoalText.trim(), completed: false }
-    ])
-    setNewGoalText('')
-    setIsAddingGoal(false)
+    if (!entryDate || isSavingGoal) return
+    const text = newGoalText.trim()
+    if (!text) return
+    setIsSavingGoal(true)
+    ;(async () => {
+      try {
+        const goal = await createJournalGoal(entryDate, { text })
+        setGoals((prev) => [...prev, goal])
+        setNewGoalText('')
+        setGoalError(null)
+        notifyGoalsUpdated()
+      } catch (err) {
+        setGoalError(err instanceof Error ? err.message : 'Failed to create goal')
+      } finally {
+        setIsSavingGoal(false)
+        setIsAddingGoal(false)
+      }
+    })()
   }
 
   function removeGoal(id: string) {
-    setGoals((prev) => prev.filter((g) => g.id !== id))
+    if (!entryDate) return
+    ;(async () => {
+      try {
+        await deleteJournalGoal(entryDate, id)
+        setGoals((prev) => prev.filter((g) => g.id !== id))
+        setGoalError(null)
+        notifyGoalsUpdated()
+      } catch (err) {
+        setGoalError(err instanceof Error ? err.message : 'Failed to delete goal')
+      }
+    })()
   }
 
   function copyPromptText() {
@@ -581,6 +666,35 @@ export function OpenJournalSpread({
 
     setIsFavorited(next)
     window.dispatchEvent(new Event('daybook_quotes_updated'))
+  }
+
+  const handleSave = async () => {
+    if (!onSave || !entryDate || isLoading) return
+    const html = editorRef.current?.innerHTML ?? entryHtml
+    const text = editorRef.current?.innerText ?? entryText
+    setEntryHtml(html)
+    setEntryText(text)
+    const input: SaveJournalInput = {
+      content: html,
+      topic: topic.trim() ? topic.trim() : null,
+      mood: selectedMood || null,
+      weather: weather || null,
+      locationText: locationText.trim() ? locationText.trim() : null,
+    }
+    try {
+      await onSave(input)
+    } catch {
+      // keep content, error shown via saveError prop
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!onDelete || !entryDate || isLoading) return
+    try {
+      await onDelete()
+    } catch {
+      // keep content
+    }
   }
 
   const weatherOptions: { type: WeatherType; label: string; icon: typeof Sun }[] = [
@@ -864,6 +978,11 @@ export function OpenJournalSpread({
                   </div>
                 ))}
               </div>
+              {goalError && (
+                <p className="text-[10px] text-rose-600 pt-1 flex-shrink-0">
+                  Unable to save: {goalError}
+                </p>
+              )}
             </div>
           </div>
 
@@ -937,14 +1056,19 @@ export function OpenJournalSpread({
               </span>
 
               <div className="relative w-full flex-1 min-h-[150px] md:min-h-0 rounded-xl bg-white/70 border border-slate-200/50 p-2 sm:p-2.5 overflow-hidden flex flex-col">
-                {(!entryText || entryText.trim() === '') && (
+                {!isLoading && (!entryText || entryText.trim() === '') && (
                   <div className="absolute top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 text-xs sm:text-[13px] text-slate-400 pointer-events-none italic leading-[24px] select-none">
                     What happened today? How did the day go? What goals could be done and not done...
                   </div>
                 )}
+                {isLoading && (
+                  <div className="absolute inset-0 bg-white/60 flex items-center justify-center text-xs text-slate-400">
+                    Loading...
+                  </div>
+                )}
                 <div
                   ref={editorRef}
-                  contentEditable
+                  contentEditable={!isLoading}
                   suppressContentEditableWarning
                   onInput={handleInput}
                   onPaste={handleEditorPaste}
@@ -966,21 +1090,56 @@ export function OpenJournalSpread({
             </div>
           </div>
 
-          <div className="pt-1.5 border-t border-slate-200/60 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-1.5 text-slate-400 flex-1">
+          {isLoading && (
+            <div className="text-[11px] text-slate-400 italic py-1 text-center">Loading...</div>
+          )}
+          {error && !isLoading && (
+            <div className="text-[11px] text-rose-500 py-1 text-center">{error}</div>
+          )}
+          <div className="pt-1.5 border-t border-slate-200/60 flex items-center justify-between flex-shrink-0 gap-2">
+            <div className="flex items-center gap-1.5 text-slate-400 flex-1 min-w-0">
               <MapPin className="w-3 h-3 flex-shrink-0" />
               <input
                 type="text"
                 value={locationText}
                 onChange={(e) => setLocationText(e.target.value)}
                 placeholder="Where are you right now..."
-                className="text-[10px] text-slate-600 bg-transparent focus:outline-none flex-1 placeholder:text-slate-400 placeholder:italic"
+                disabled={!!isLoading}
+                className="text-[10px] text-slate-600 bg-transparent focus:outline-none flex-1 placeholder:text-slate-400 placeholder:italic disabled:opacity-50"
               />
             </div>
-            <span className="text-[10px] text-slate-400 font-medium pl-1.5">
+            <span className="text-[10px] text-slate-400 font-medium pl-1.5 flex-shrink-0">
               {entryText.trim().split(/\s+/).filter(Boolean).length} words
             </span>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!!isLoading || saveState === 'saving'}
+              className={`ml-1 px-3 py-1 rounded-full text-[11px] font-semibold transition-all flex-shrink-0 ${
+                saveState === 'saved'
+                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                  : saveState === 'error'
+                    ? 'bg-rose-100 text-rose-700 border border-rose-200 hover:bg-rose-50'
+                    : 'bg-[#6eafe9] text-white hover:bg-[#5b9fe0] shadow-sm'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Retry' : 'Save'}
+            </button>
+            {journal && onDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={!!isLoading}
+                className="p-1 text-slate-400 hover:text-rose-500 disabled:opacity-50"
+                title="Delete entry"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+          {saveError && saveState === 'error' && (
+            <p className="text-[11px] text-rose-600 pt-1">{saveError}</p>
+          )}
         </div>
       </div>
     </div>

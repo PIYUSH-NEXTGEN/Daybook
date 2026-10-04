@@ -19,9 +19,27 @@ import { JournalToolbar } from './components/JournalToolbar'
 import { defaultTextStyle, type JournalTextStyle } from './components/journalTextStyle'
 import { FirstRunRegistration } from './components/FirstRunRegistration'
 import { OnboardingView } from './components/OnboardingView'
-import { getCurrentUser, getCurrentProfile, type LocalUser, type UserProfile } from './lib/api'
+import {
+  getCurrentUser,
+  getCurrentProfile,
+  getJournal,
+  saveJournal,
+  deleteJournal,
+  getJournalDates,
+  type Journal,
+  type LocalUser,
+  type SaveJournalInput,
+  type UserProfile,
+} from './lib/api'
 
 const ACTIVE_USER_ID_KEY = 'daybook_active_user_id'
+
+function toDateKey(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 const navItems = ['Home', 'Journal', 'About'] as const
 type NavItem = (typeof navItems)[number]
@@ -186,6 +204,15 @@ function App() {
     }
     return defaultTextStyle
   })
+  const [selectedJournalDate, setSelectedJournalDate] = useState<string>(() => toDateKey(new Date()))
+  const [journal, setJournal] = useState<Journal | null>(null)
+  const [journalLoading, setJournalLoading] = useState(false)
+  const [journalError, setJournalError] = useState<string | null>(null)
+  const [journalSaveState, setJournalSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [journalSaveError, setJournalSaveError] = useState<string | null>(null)
+  const [journalDates, setJournalDates] = useState<string[]>([])
+  const journalFetchIdRef = useRef(0)
+
   const userMenuRef = useRef<HTMLDivElement>(null)
   const openingFromAboutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -378,6 +405,7 @@ function App() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable react-hooks/set-state-in-effect -- intentional sync state reset on date/user change; guarded and not a cascading render loop
     let cancelled = false
 
     getCurrentUser()
@@ -421,6 +449,7 @@ function App() {
       cancelled = true
     }
   }, [])
+  // eslint-enable react-hooks/set-state-in-effect
 
   function handleUserCreated(user: LocalUser) {
     try {
@@ -448,6 +477,96 @@ function App() {
     setActivePage('Journal')
     setActiveSidebarTab('Book')
     setHomeTextState('hidden')
+  }
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- intentional sync state reset on date/user change; guarded and not a cascading render loop */
+    if (!currentUser || isCheckingUser) return
+
+    const fetchId = ++journalFetchIdRef.current
+    setJournalLoading(true)
+    setJournalError(null)
+    setJournal(null)
+    setJournalSaveState('idle')
+    setJournalSaveError(null)
+
+    const controller = new AbortController()
+    getJournal(selectedJournalDate)
+      .then((result) => {
+        if (fetchId !== journalFetchIdRef.current || controller.signal.aborted) return
+        setJournal(result)
+      })
+      .catch((err) => {
+        if (fetchId !== journalFetchIdRef.current || controller.signal.aborted) return
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setJournalError(err instanceof Error ? err.message : 'Failed to load journal')
+      })
+      .finally(() => {
+        if (fetchId !== journalFetchIdRef.current || controller.signal.aborted) return
+        setJournalLoading(false)
+      })
+
+    return () => {
+      controller.abort()
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [selectedJournalDate, currentUser, isCheckingUser])
+
+  useEffect(() => {
+    // eslint-disable react-hooks/set-state-in-effect -- intentional sync state reset on date/user change; guarded and not a cascading render loop
+    if (!currentUser || isCheckingUser) {
+      setJournalDates([])
+      return
+    }
+    const from = `${new Date().getFullYear()}-01-01`
+    const to = `${new Date().getFullYear() + 1}-12-31`
+    getJournalDates(from, to)
+      .then(setJournalDates)
+      .catch(() => {})
+  }, [currentUser, isCheckingUser, journal?.updatedAt])
+  // eslint-enable react-hooks/set-state-in-effect
+
+  const handleSaveJournal = async (input: SaveJournalInput) => {
+    if (!currentUser || journalLoading) {
+      throw new Error('Cannot save while loading')
+    }
+    const dateToSave = selectedJournalDate
+    setJournalSaveState('saving')
+    setJournalSaveError(null)
+    try {
+      const saved = await saveJournal(dateToSave, {
+        content: input.content,
+        topic: input.topic ?? null,
+        mood: input.mood ?? null,
+        weather: input.weather ?? null,
+        locationText: input.locationText ?? null,
+      })
+      if (dateToSave !== selectedJournalDate) {
+        return saved
+      }
+      setJournal(saved)
+      setJournalSaveState('saved')
+      setJournalDates((prev) => (prev.includes(saved.entryDate) ? prev : [...prev, saved.entryDate].sort()))
+      setTimeout(() => setJournalSaveState('idle'), 2000)
+      return saved
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save journal'
+      setJournalSaveState('error')
+      setJournalSaveError(msg)
+      throw err
+    }
+  }
+
+  const handleDeleteJournal = async () => {
+    if (!currentUser) return
+    await deleteJournal(selectedJournalDate)
+    setJournal(null)
+    setJournalDates((prev) => prev.filter((d) => d !== selectedJournalDate))
+    setJournalSaveState('idle')
+  }
+
+  const handleSelectJournalDate = (dateKey: string) => {
+    setSelectedJournalDate(dateKey)
   }
 
   if (isCheckingUser) {
@@ -730,11 +849,20 @@ function App() {
                       )}
 
                       {activeSidebarTab === 'Calendar' && (
-                        <CalendarView onOpenJournal={handleOpenJournal} />
+                        <CalendarView
+                          selectedDate={selectedJournalDate}
+                          onSelectDate={handleSelectJournalDate}
+                          hasEntryForDate={(y, m, d) =>
+                            journalDates.includes(
+                              `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                            )
+                          }
+                          onOpenJournal={handleOpenJournal}
+                        />
                       )}
 
                       {activeSidebarTab === 'Goals' && (
-                        <GoalsView />
+                        <GoalsView selectedJournalDate={selectedJournalDate} />
                       )}
 
                       {activeSidebarTab === 'Library' && (
@@ -768,6 +896,14 @@ function App() {
                   !isOpeningFromAbout
                 }
                 textStyle={textStyle}
+                entryDate={selectedJournalDate}
+                journal={journal}
+                journalLoading={journalLoading}
+                journalError={journalError}
+                saveState={journalSaveState}
+                saveError={journalSaveError}
+                onSaveJournal={handleSaveJournal}
+                onDeleteJournal={handleDeleteJournal}
                 onOpen={handleOpenJournal}
                 onClose={() => handleNavigatePage('Home')}
               />

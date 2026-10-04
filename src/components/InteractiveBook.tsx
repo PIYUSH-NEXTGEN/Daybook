@@ -3,6 +3,7 @@ import { Sparkles, Heart, Share2, Sun, Flame } from 'lucide-react'
 import sceneImg from '../assets/images/scene.webp'
 import { OpenJournalSpread } from './OpenJournalSpread'
 import type { JournalTextStyle } from './journalTextStyle'
+import type { Journal, SaveJournalInput } from '../lib/api'
 
 interface InteractiveBookProps {
   isOpen: boolean
@@ -10,6 +11,14 @@ interface InteractiveBookProps {
   onClose?: () => void
   className?: string
   textStyle?: JournalTextStyle
+  entryDate?: string
+  journal?: Journal | null
+  journalLoading?: boolean
+  journalError?: string | null
+  saveState?: 'idle' | 'saving' | 'saved' | 'error'
+  saveError?: string | null
+  onSaveJournal?: (input: SaveJournalInput) => Promise<Journal>
+  onDeleteJournal?: () => Promise<void>
 }
 
 export function InteractiveBook({
@@ -17,7 +26,15 @@ export function InteractiveBook({
   onOpen,
   onClose,
   className = '',
-  textStyle
+  textStyle,
+  entryDate,
+  journal,
+  journalLoading,
+  journalError,
+  saveState,
+  saveError,
+  onSaveJournal,
+  onDeleteJournal,
 }: InteractiveBookProps) {
   const [stage, setStage] = useState<'closed' | 'opening' | 'open' | 'closing'>(
     isOpen ? 'open' : 'closed'
@@ -59,7 +76,18 @@ export function InteractiveBook({
   if (stage === 'open') {
     return (
       <div className={`w-full flex justify-center animate-in fade-in duration-300 ${className}`}>
-        <OpenJournalSpread onClose={onClose} textStyle={textStyle} />
+        <OpenJournalSpread
+          onClose={onClose}
+          textStyle={textStyle}
+          entryDate={entryDate}
+          journal={journal}
+          isLoading={journalLoading}
+          error={journalError}
+          saveState={saveState}
+          saveError={saveError}
+          onSave={onSaveJournal}
+          onDelete={onDeleteJournal}
+        />
       </div>
     )
   }

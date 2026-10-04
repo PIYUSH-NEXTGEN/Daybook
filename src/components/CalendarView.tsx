@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- syncing controlled selectedDate prop to internal calendar state */
 import { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, ChevronDown, Calendar as CalendarIcon, Check } from 'lucide-react'
 
@@ -19,6 +20,8 @@ export function CalendarEntryDot({ isToday = false, className = '' }: CalendarEn
 interface CalendarViewProps {
   onOpenJournal?: () => void
   hasEntryForDate?: (year: number, month: number, day: number) => boolean
+  selectedDate?: string
+  onSelectDate?: (dateKey: string) => void
 }
 
 const YEARS = [2026, 2027, 2028, 2029, 2030]
@@ -55,12 +58,30 @@ const MONTHS_SHORT = [
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 
-export function CalendarView({ onOpenJournal, hasEntryForDate }: CalendarViewProps) {
+export function CalendarView({ onOpenJournal, hasEntryForDate, selectedDate, onSelectDate }: CalendarViewProps) {
   const currentDate = new Date()
   const initialYear = Math.max(2026, Math.min(2030, currentDate.getFullYear()))
-  const [selectedYear, setSelectedYear] = useState(initialYear)
-  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth())
-  const [selectedDay, setSelectedDay] = useState(currentDate.getDate())
+  const [selectedYear, setSelectedYear] = useState(() => {
+    if (selectedDate) {
+      const [y, m, d] = selectedDate.split('-').map(Number)
+      if (!Number.isNaN(y) && !Number.isNaN(m) && !Number.isNaN(d)) return Math.max(2026, Math.min(2030, y))
+    }
+    return initialYear
+  })
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    if (selectedDate) {
+      const [, m] = selectedDate.split('-').map(Number)
+      if (!Number.isNaN(m)) return m - 1
+    }
+    return currentDate.getMonth()
+  })
+  const [selectedDay, setSelectedDay] = useState(() => {
+    if (selectedDate) {
+      const [, , d] = selectedDate.split('-').map(Number)
+      if (!Number.isNaN(d)) return d
+    }
+    return currentDate.getDate()
+  })
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false)
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right')
   const yearPickerRef = useRef<HTMLDivElement>(null)
@@ -76,6 +97,15 @@ export function CalendarView({ onOpenJournal, hasEntryForDate }: CalendarViewPro
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
+
+  useEffect(() => {
+    if (!selectedDate) return
+    const [y, m, d] = selectedDate.split('-').map(Number)
+    if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return
+    setSelectedYear(Math.max(2026, Math.min(2030, y)))
+    setSelectedMonth(m - 1)
+    setSelectedDay(d)
+  }, [selectedDate])
 
   const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate()
   const firstDayOfWeek = new Date(selectedYear, selectedMonth, 1).getDay()
@@ -270,11 +300,16 @@ export function CalendarView({ onOpenJournal, hasEntryForDate }: CalendarViewPro
               const isSelected = selectedDay === day
               const hasEntry = hasEntryForDate ? hasEntryForDate(selectedYear, selectedMonth, day) : false
 
+              const dateKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
               return (
                 <button
                   key={day}
                   type="button"
-                  onClick={() => setSelectedDay(day)}
+                  onClick={() => {
+                    setSelectedDay(day)
+                    onSelectDate?.(dateKey)
+                  }}
                   className={`py-1 sm:py-1.5 text-xs sm:text-sm rounded-lg font-medium relative flex flex-col items-center justify-center transition-all cursor-pointer ${
                     isToday
                       ? 'bg-[#6eafe9] text-white font-bold shadow-xs'

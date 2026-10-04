@@ -105,7 +105,7 @@ export function AboutPage({ onStartWriting }: AboutPageProps) {
             className="text-2xl sm:text-3xl text-slate-500"
             style={{ fontFamily: "'Cedarville Cursive', cursive" }}
           >
-            Happy Journaling, DayBook
+            Happy Journaling
           </p>
 
           {onStartWriting && (
