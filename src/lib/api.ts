@@ -357,3 +357,45 @@ export async function unsaveQuote(quoteId: string): Promise<{ saved: boolean }> 
   })
 }
 
+export type JournalObservationType =
+  | 'behavior'
+  | 'emotion'
+  | 'goal'
+  | 'habit'
+  | 'win'
+  | 'struggle'
+  | 'context'
+
+export interface JournalObservation {
+  id: string
+  type: JournalObservationType
+  content: string
+  confidence: number | null
+  createdAt: string
+}
+
+export async function getJournalObservations(
+  entryDate: string,
+  signal?: AbortSignal,
+): Promise<JournalObservation[]> {
+  const data = await request<{ observations: JournalObservation[] }>(
+    `/api/journals/${encodeURIComponent(entryDate)}/observations`,
+    { signal },
+  )
+  return data.observations
+}
+
+export async function generateJournalObservations(
+  entryDate: string,
+): Promise<JournalObservation[]> {
+  const data = await request<{ observations: JournalObservation[] }>(
+    `/api/journals/${encodeURIComponent(entryDate)}/observations/generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    },
+  )
+  return data.observations
+}
+

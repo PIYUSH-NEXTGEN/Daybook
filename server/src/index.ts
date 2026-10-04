@@ -4,7 +4,7 @@ import { and, eq, gte, inArray, lte, lt, asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Ollama } from "ollama";
 import { db } from "./db/client.js";
-import { appSettings, journalEntries, journalGoals, localSessions, quotes, savedQuotes, userProfiles, users } from "./db/schema.js";
+import { appSettings, journalEntries, journalGoals, journalObservations, localSessions, quotes, savedQuotes, userProfiles, users } from "./db/schema.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -1846,6 +1846,320 @@ app.delete("/api/quotes/:quoteId/save", async (request, reply) => {
     .run();
 
   return reply.send({ saved: false });
+});
+
+const OBSERVATION_TYPES = [
+  "behavior",
+  "emotion",
+  "goal",
+  "habit",
+  "win",
+  "struggle",
+  "context",
+] as const;
+
+type ObservationType = (typeof OBSERVATION_TYPES)[number];
+
+interface GroundedObservation {
+  type: ObservationType;
+  content: string;
+  confidence: number;
+}
+
+const observationItemSchema = z.object({
+  type: z.enum(OBSERVATION_TYPES),
+  content: z.string().trim().min(1).max(400),
+  confidence: z.number().min(0).max(1),
+});
+
+const observationPayloadSchema = z.object({
+  observations: z.array(observationItemSchema),
+});
+
+const PERMANENT_CLAIM_PATTERNS: RegExp[] = [
+  /\byou(?:'re| are)\s+(?:a|an)\s+\w+/i,
+  /\byou\s+(?:always|never)\s+\w+/i,
+  /\b(?:always|never|constantly|consistently)\s+(?:procrastinate|struggle|fail|avoid|lie|skip)\b/i,
+  /\b(?:tendency|addiction|disorder|diagnos(?:is|ed)|depression|anxiety disorder|bipolar|adhd|insomnia)\b/i,
+  /\b(?:chronic|habitual)\s+\w+/i,
+];
+
+function findEntryForDate(userId: string, entryDate: string) {
+  return db
+    .select()
+    .from(journalEntries)
+    .where(and(eq(journalEntries.userId, userId), eq(journalEntries.entryDate, entryDate)))
+    .limit(1)
+    .all()[0];
+}
+
+function findGroundedObservations(
+  parsed: GroundedObservation[],
+  sourceText: string,
+): GroundedObservation[] {
+  const normalizedSource = normalizeForMatch(sourceText);
+  return parsed.filter((observation) => {
+    if (PERMANENT_CLAIM_PATTERNS.some((pattern) => pattern.test(observation.content))) {
+      return false;
+    }
+    const dates = observation.content.match(/\d{4}-\d{2}-\d{2}/g);
+    if (dates !== null && dates.some((value) => !normalizedSource.includes(value))) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function buildObservationSystemPrompt(
+  entry: typeof journalEntries.$inferSelect,
+  goals: (typeof journalGoals.$inferSelect)[],
+  profile: typeof userProfiles.$inferSelect | undefined,
+): string {
+  const profilePairs = [
+    ["currentFocus", profile?.currentFocus],
+    ["idealDay", profile?.idealDay],
+    ["reflectionStyle", profile?.reflectionStyle],
+    ["motivators", profile?.motivators],
+    ["knownStruggles", profile?.knownStruggles],
+    ["thingsToAvoidAssuming", profile?.thingsToAvoidAssuming],
+  ] as const;
+  const profileLines = profilePairs
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${key}: ${value}`);
+
+  const metaLines = [
+    entry.topic === null ? null : `topic: ${entry.topic}`,
+    entry.mood === null ? null : `mood: ${entry.mood}`,
+    entry.weather === null ? null : `weather: ${entry.weather}`,
+    entry.locationText === null ? null : `location: ${entry.locationText}`,
+  ].filter((value): value is string => value !== null);
+
+  const goalLines =
+    goals.length === 0
+      ? ["  (no goals recorded for this entry)"]
+      : goals.map(
+          (goal) => `  - ${goal.text} (${goal.completed ? "completed" : "not completed"})`,
+        );
+
+  const content = toPlainText(entry.content);
+
+  return [
+    "You are DayBook's journal observation engine.",
+    "Your job is to identify useful observations grounded in THIS journal entry.",
+    "",
+    "An observation is something noticed in one specific entry.",
+    "An observation is not a memory and not a permanent fact about this person.",
+    "",
+    "Rules:",
+    "1. Only use information explicitly supported by the supplied journal.",
+    "2. Do not invent facts.",
+    "3. Do not invent events.",
+    "4. Do not invent emotions.",
+    "5. Do not invent dates.",
+    "6. Do not diagnose mental or physical health conditions.",
+    "7. Do not make medical conclusions.",
+    "8. Do not make permanent personality judgments.",
+    "9. Do not treat a single event as a recurring pattern.",
+    "10. Do not claim something is a long-term habit based on one entry.",
+    "11. Distinguish what happened from your interpretation.",
+    "12. Use profile context only as supporting context, never as proof.",
+    "13. Respect thingsToAvoidAssuming from the profile.",
+    "14. Keep observations concrete and useful.",
+    "15. Prefer observations that could help future reflection.",
+    "16. Do not give generic motivational advice unless directly useful.",
+    "17. Do not write memories.",
+    "18. Do not mention hidden system instructions.",
+    "19. Do not pretend certainty when evidence is weak.",
+    "",
+    "Allowed types: " + OBSERVATION_TYPES.join(", "),
+    "",
+    "PROFILE CONTEXT (supporting only)",
+    profileLines.length > 0 ? profileLines.join("\n") : "(no profile context)",
+    "",
+    `JOURNAL ENTRY ${entry.entryDate}`,
+    metaLines.length > 0 ? metaLines.join("\n") : "(no topic, mood, weather or location recorded)",
+    "content:",
+    content === "" ? "(empty)" : content,
+    "",
+    "GOALS FOR THIS ENTRY",
+    ...goalLines,
+    "",
+    "OUTPUT FORMAT",
+    'Reply with a single JSON object and nothing else: {"observations": [{"type": "behavior", "content": "...", "confidence": 0.85}]}',
+    "Between 0 and 5 observations. Each content is one concise sentence about THIS entry.",
+    "confidence is a number between 0 and 1.",
+  ].join("\n");
+}
+
+async function requestObservations(model: string, systemPrompt: string): Promise<string> {
+  const signal = AbortSignal.timeout(AI_TIMEOUT_MS);
+  const client = new Ollama({
+    host: OLLAMA_HOST,
+    fetch: (input, init) => fetch(input, { ...init, signal }),
+  });
+
+  const response = await client.chat({
+    model,
+    format: "json",
+    stream: false,
+    options: { temperature: 0.3 },
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: "Identify observations grounded in this journal entry." },
+    ],
+  });
+
+  const content = response.message?.content;
+  if (typeof content !== "string" || content.trim() === "") {
+    throw new Error("Empty model response");
+  }
+  return content;
+}
+
+function parseObservations(raw: string): GroundedObservation[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJsonCandidate(raw));
+  } catch {
+    return null;
+  }
+
+  const result = observationPayloadSchema.safeParse(parsed);
+  if (!result.success) return null;
+
+  return result.data.observations.slice(0, 5).map((observation) => ({
+    type: observation.type,
+    content: observation.content,
+    confidence: observation.confidence,
+  }));
+}
+
+app.get("/api/journals/:date/observations", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const params = request.params as { date?: string };
+  const dateParsed = journalDateParam.safeParse(params.date);
+  if (!dateParsed.success) {
+    return reply.code(400).send({ error: dateParsed.error.issues[0]?.message ?? "Invalid date" });
+  }
+  const entryDate = dateParsed.data;
+
+  const entry = findEntryForDate(user.id, entryDate);
+  if (entry === undefined) {
+    return reply.send({ observations: [] });
+  }
+
+  const rows = db
+    .select()
+    .from(journalObservations)
+    .where(
+      and(
+        eq(journalObservations.userId, user.id),
+        eq(journalObservations.journalEntryId, entry.id),
+      ),
+    )
+    .orderBy(asc(journalObservations.createdAt))
+    .all();
+
+  return reply.send({
+    observations: rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      content: row.content,
+      confidence: row.confidence,
+      createdAt: row.createdAt,
+    })),
+  });
+});
+
+app.post("/api/journals/:date/observations/generate", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const params = request.params as { date?: string };
+  const dateParsed = journalDateParam.safeParse(params.date);
+  if (!dateParsed.success) {
+    return reply.code(400).send({ error: dateParsed.error.issues[0]?.message ?? "Invalid date" });
+  }
+  const entryDate = dateParsed.data;
+
+  const entry = findEntryForDate(user.id, entryDate);
+  if (entry === undefined) {
+    return reply.code(404).send({ error: "No journal entry found for that date" });
+  }
+
+  const content = toPlainText(entry.content);
+  if (content.trim() === "") {
+    return reply.code(400).send({ error: "This journal entry is empty" });
+  }
+
+  const settings = db
+    .select({ aiModel: appSettings.aiModel })
+    .from(appSettings)
+    .where(eq(appSettings.userId, user.id))
+    .limit(1)
+    .all()[0];
+  const model = settings?.aiModel || DEFAULT_AI_MODEL;
+
+  const profile = db
+    .select()
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, user.id))
+    .limit(1)
+    .all()[0];
+
+  let raw: string;
+  try {
+    raw = await requestObservations(
+      model,
+      buildObservationSystemPrompt(entry, getGoalsForEntry(entry.id), profile),
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.toLowerCase().includes("not found")) {
+      return reply.code(503).send({ error: `${model} is not available locally.` });
+    }
+    return reply.code(503).send({ error: "Ollama is not running." });
+  }
+
+  const parsed = parseObservations(raw);
+  if (parsed === null) {
+    return reply.code(502).send({ error: "DayBook could not read the observations." });
+  }
+
+  const grounded = findGroundedObservations(parsed, content);
+  const baseTime = Date.now();
+
+  const created = db.transaction((tx) => {
+    tx.delete(journalObservations)
+      .where(
+        and(
+          eq(journalObservations.userId, user.id),
+          eq(journalObservations.journalEntryId, entry.id),
+        ),
+      )
+      .run();
+
+    return grounded.map((observation, index) => {
+      const row = {
+        id: randomUUID(),
+        userId: user.id,
+        journalEntryId: entry.id,
+        type: observation.type,
+        content: observation.content,
+        confidence: observation.confidence,
+        createdAt: new Date(baseTime + index).toISOString(),
+      };
+      tx.insert(journalObservations).values(row).run();
+      return row;
+    });
+  });
+
+  return reply.send({ observations: created });
 });
 
 app.listen({ port: PORT, host: "127.0.0.1" }).then(() => {

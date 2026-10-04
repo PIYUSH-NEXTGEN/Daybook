@@ -12,13 +12,21 @@ import {
   Plus,
   Trash2,
   MapPin,
+  Sparkles,
+  Loader2,
   Flame,
   Upload,
   RotateCcw
 } from 'lucide-react'
 import defaultPhoto from '../assets/images/scene.webp'
 import type { JournalTextStyle } from './journalTextStyle'
-import type { Journal, SaveJournalInput, JournalGoal, DailyQuoteResponse } from '../lib/api'
+import type {
+  Journal,
+  SaveJournalInput,
+  JournalGoal,
+  DailyQuoteResponse,
+  JournalObservation,
+} from '../lib/api'
 import {
   createJournalGoal,
   deleteJournalGoal,
@@ -26,6 +34,8 @@ import {
   getJournalGoals,
   saveQuote,
   unsaveQuote,
+  getJournalObservations,
+  generateJournalObservations,
   updateJournalGoal,
 } from '../lib/api'
 
@@ -78,6 +88,12 @@ export function OpenJournalSpread({
   } | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [isSavingQuote, setIsSavingQuote] = useState(false)
+  const [observationState, setObservationState] = useState<{
+    date: string
+    items: JournalObservation[]
+  } | null>(null)
+  const [observationError, setObservationError] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [entryHtml, setEntryHtml] = useState('')
   const [entryText, setEntryText] = useState('')
   const [locationText, setLocationText] = useState('')
@@ -87,6 +103,7 @@ export function OpenJournalSpread({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const weatherDropdownRef = useRef<HTMLDivElement>(null)
   const dailyQuote = entryDate && quoteState?.date === entryDate ? quoteState.value : null
+  const observations = entryDate && observationState?.date === entryDate ? observationState.items : []
 
   const displayDate = entryDate
     ? (() => {
@@ -646,6 +663,44 @@ export function OpenJournalSpread({
     }
   }
 
+  useEffect(() => {
+    if (!entryDate) return
+
+    const controller = new AbortController()
+
+    getJournalObservations(entryDate, controller.signal)
+      .then((items) => {
+        if (controller.signal.aborted) return
+        setObservationState({ date: entryDate, items })
+        setObservationError(null)
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setObservationState({ date: entryDate, items: [] })
+        setObservationError(err instanceof Error ? err.message : 'Failed to load observations')
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [entryDate])
+
+  async function generateObservations() {
+    if (!entryDate || isGenerating) return
+
+    setIsGenerating(true)
+    setObservationError(null)
+    try {
+      const items = await generateJournalObservations(entryDate)
+      setObservationState({ date: entryDate, items })
+    } catch (err) {
+      setObservationError(err instanceof Error ? err.message : 'Could not generate observations')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   const handleSave = async () => {
     if (!onSave || !entryDate || isLoading) return
     const html = editorRef.current?.innerHTML ?? entryHtml
@@ -661,6 +716,9 @@ export function OpenJournalSpread({
     }
     try {
       await onSave(input)
+      if (text.trim() !== '' && observations.length === 0) {
+        void generateObservations()
+      }
     } catch {
       // keep content, error shown via saveError prop
     }
@@ -899,7 +957,7 @@ export function OpenJournalSpread({
                 </div>
               )}
 
-              <div className="space-y-1 overflow-y-auto pr-0.5 scrollbar-none flex-1 min-h-[80px] max-h-[180px] sm:min-h-[90px] sm:max-h-[145px] md:max-h-[165px]">
+              <div className="space-y-1 overflow-y-auto pr-0.5 scrollbar-none flex-1 min-h-[46px] max-h-[180px] sm:max-h-[145px] md:max-h-[165px]">
                 {goals.length === 0 && !isAddingGoal && (
                   <button
                     type="button"
@@ -959,6 +1017,76 @@ export function OpenJournalSpread({
               {goalError && (
                 <p className="text-[10px] text-rose-600 pt-1 flex-shrink-0">
                   Unable to save: {goalError}
+                </p>
+              )}
+            </div>
+
+            <div className="pt-1.5 flex-shrink-0">
+              <div className="flex items-center justify-between pb-1">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-[#4f8ee6]" />
+                  <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">
+                    DayBook Noticed
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void generateObservations()
+                  }}
+                  disabled={isGenerating || !!isLoading || !journal}
+                  className="text-[9px] font-medium text-[#4f8ee6] hover:text-[#5b9fe0] disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {isGenerating
+                    ? 'Noticing...'
+                    : observations.length > 0
+                      ? 'Notice again'
+                      : 'Notice this entry'}
+                </button>
+              </div>
+
+              <div className="space-y-1 max-h-[68px] overflow-y-auto pr-0.5 scrollbar-none">
+                {isGenerating && (
+                  <p className="text-[9px] text-slate-400 italic flex items-center gap-1.5 py-0.5">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-[#4f8ee6]" />
+                    Reflecting on this entry...
+                  </p>
+                )}
+                {observations.length === 0 && !isGenerating && (
+                  <p className="text-[9px] text-slate-400 italic py-0.5">
+                    No observations yet for this entry.
+                  </p>
+                )}
+                {observations.map((observation) => (
+                  <div
+                    key={observation.id}
+                    className="p-1.5 sm:p-2 rounded-md bg-white border border-slate-200/60"
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-[8px] uppercase tracking-wider font-semibold text-[#4f8ee6] bg-[#eff6fc] rounded px-1 py-0.5 mt-0.5 flex-shrink-0">
+                        {observation.type}
+                      </span>
+                      <p className="text-[10px] text-slate-700 leading-snug">
+                        {observation.content}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {observationError && (
+                <p className="text-[9px] text-rose-600 pt-1">
+                  Could not generate observations: {observationError}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void generateObservations()
+                    }}
+                    disabled={isGenerating}
+                    className="underline ml-1 cursor-pointer disabled:opacity-50"
+                  >
+                    Retry
+                  </button>
                 </p>
               )}
             </div>
