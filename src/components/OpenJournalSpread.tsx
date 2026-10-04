@@ -16,7 +16,8 @@ import {
   Loader2,
   Flame,
   Upload,
-  RotateCcw
+  RotateCcw,
+  ChevronDown
 } from 'lucide-react'
 import defaultPhoto from '../assets/images/scene.webp'
 import type { JournalTextStyle } from './journalTextStyle'
@@ -75,6 +76,7 @@ export function OpenJournalSpread({
   const [topic, setTopic] = useState('')
   const [isEditingTopic, setIsEditingTopic] = useState(false)
   const [selectedMood, setSelectedMood] = useState<string>('Peaceful')
+  const [isMoodPickerOpen, setIsMoodPickerOpen] = useState(false)
   const [goals, setGoals] = useState<JournalGoal[]>([])
   const [newGoalText, setNewGoalText] = useState('')
   const [isAddingGoal, setIsAddingGoal] = useState(false)
@@ -102,6 +104,7 @@ export function OpenJournalSpread({
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const weatherDropdownRef = useRef<HTMLDivElement>(null)
+  const moodDropdownRef = useRef<HTMLDivElement>(null)
   const dailyQuote = entryDate && quoteState?.date === entryDate ? quoteState.value : null
   const observations = entryDate && observationState?.date === entryDate ? observationState.items : []
 
@@ -510,6 +513,12 @@ export function OpenJournalSpread({
       ) {
         setIsWeatherPickerOpen(false)
       }
+      if (
+        moodDropdownRef.current &&
+        !moodDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsMoodPickerOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -758,6 +767,7 @@ export function OpenJournalSpread({
     { id: 'Overwhelmed', label: 'Overwhelmed', emoji: '🌊', category: 'negative' }
   ]
 
+  const activeMood = moods.find((m) => m.id === selectedMood) || moods[0]
   const ActiveWeatherIcon =
     weatherOptions.find((w) => w.type === weather)?.icon || Sun
 
@@ -888,207 +898,222 @@ export function OpenJournalSpread({
               </div>
             </div>
 
-            <div className="space-y-1 flex-shrink-0">
-              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block">
+            <div className="relative flex items-center justify-between flex-shrink-0" ref={moodDropdownRef}>
+              <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">
                 Today&apos;s Mood
               </span>
-              <div className="flex flex-wrap items-center gap-1 py-0.5">
-                {moods.map((m) => {
-                  const isSelected = selectedMood === m.id
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSelectedMood(m.id)}
-                      className={`text-[9.5px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
-                        isSelected
-                          ? m.category === 'negative'
-                            ? 'bg-slate-100 border-slate-400 text-slate-800 font-semibold shadow-2xs'
-                            : 'bg-[#eff6fc] border-[#6eafe9] text-[#4f8ee6] font-semibold shadow-2xs'
-                          : 'bg-white border-slate-200/70 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      <span className="text-xs">{m.emoji}</span>
-                      <span>{m.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+              <button
+                type="button"
+                onClick={() => setIsMoodPickerOpen((prev) => !prev)}
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg border border-slate-200/80 bg-white hover:border-[#6eafe9] text-slate-700 text-[10px] sm:text-[11px] font-medium shadow-2xs transition-all cursor-pointer"
+              >
+                <span className="text-xs">{activeMood.emoji}</span>
+                <span>{activeMood.label}</span>
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isMoodPickerOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-            <div className="space-y-1 flex-1 min-h-0 flex flex-col pt-0.5">
-              <div className="flex items-center justify-between flex-shrink-0">
-                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">
-                  Today&apos;s Goals
-                </span>
-                {!isAddingGoal && (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingGoal(true)}
-                    className="text-[10px] font-semibold text-[#4f8ee6] hover:text-[#3b79ce] flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <Plus className="w-2.5 h-2.5" />
-                    <span>Add</span>
-                  </button>
-                )}
-              </div>
-
-              {isAddingGoal && (
-                <div className="flex items-center gap-1 pt-0.5 pb-1 flex-shrink-0">
-                  <input
-                    type="text"
-                    value={newGoalText}
-                    onChange={(e) => setNewGoalText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') addGoal()
-                      if (e.key === 'Escape') setIsAddingGoal(false)
-                    }}
-                    placeholder="Add todays goals here..."
-                    autoFocus
-                    className="flex-1 text-[10px] px-2 py-0.5 rounded bg-white border border-[#6eafe9] text-slate-700 focus:outline-none placeholder:text-slate-400 placeholder:italic"
-                  />
-                  <button
-                    type="button"
-                    onClick={addGoal}
-                    className="px-2 py-0.5 text-[10px] rounded bg-[#6eafe9] text-white font-medium cursor-pointer hover:bg-[#5b9fe0] transition-colors"
-                  >
-                    Add
-                  </button>
+              {isMoodPickerOpen && (
+                <div className="absolute top-full mt-1 right-0 z-50 bg-white rounded-2xl shadow-xl border border-slate-100 p-1.5 w-52 max-h-[220px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 grid grid-cols-2 gap-1">
+                  {moods.map((m) => {
+                    const isSelected = selectedMood === m.id
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMood(m.id)
+                          setIsMoodPickerOpen(false)
+                        }}
+                        className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-medium transition-colors cursor-pointer text-left ${
+                          isSelected
+                            ? 'bg-[#eff6fc] text-[#4f8ee6] font-semibold'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="text-xs">{m.emoji}</span>
+                        <span className="truncate">{m.label}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
-
-              <div className="space-y-1 overflow-y-auto pr-0.5 scrollbar-none flex-1 min-h-[46px] max-h-[180px] sm:max-h-[145px] md:max-h-[165px]">
-                {goals.length === 0 && !isAddingGoal && (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingGoal(true)}
-                    className="w-full flex items-center justify-between gap-1.5 p-1 sm:p-1.5 rounded-md bg-white/70 border border-dashed border-slate-300 hover:border-[#6eafe9] hover:bg-[#eff6fc]/40 text-slate-400 hover:text-[#4f8ee6] transition-all cursor-pointer group/placeholder"
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <div className="w-3 h-3 rounded border border-dashed border-slate-300 group-hover/placeholder:border-[#6eafe9] flex items-center justify-center flex-shrink-0" />
-                      <span className="text-[10px] italic">
-                        Add todays goals here
-                      </span>
-                    </div>
-                    <Plus className="w-2.5 h-2.5 opacity-60 group-hover/placeholder:opacity-100" />
-                  </button>
-                )}
-
-                {goals.map((g) => (
-                  <div
-                    key={g.id}
-                    className="flex items-center justify-between gap-1.5 p-1 rounded-md bg-white border border-slate-200/50 hover:border-slate-300/80 transition-colors group/goal"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleGoal(g.id)}
-                      className="flex items-center gap-1.5 min-w-0 flex-1 text-left cursor-pointer"
-                    >
-                      <div
-                        className={`w-3 h-3 rounded border flex items-center justify-center transition-colors flex-shrink-0 ${
-                          g.completed
-                            ? 'bg-[#6eafe9] border-[#6eafe9] text-white'
-                            : 'border-slate-300 bg-white'
-                        }`}
-                      >
-                        {g.completed && <Check className="w-2 h-2 stroke-[3]" />}
-                      </div>
-                      <span
-                        className={`text-[10px] truncate transition-all ${
-                          g.completed
-                            ? 'line-through text-slate-400'
-                            : 'text-slate-700 font-medium'
-                        }`}
-                      >
-                        {g.text}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeGoal(g.id)}
-                      className="opacity-0 group-hover/goal:opacity-100 text-slate-400 hover:text-rose-500 transition-opacity p-0.5 cursor-pointer"
-                      title="Delete goal"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {goalError && (
-                <p className="text-[10px] text-rose-600 pt-1 flex-shrink-0">
-                  Unable to save: {goalError}
-                </p>
-              )}
             </div>
 
-            <div className="pt-1.5 flex-shrink-0">
-              <div className="flex items-center justify-between pb-1">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-[#4f8ee6]" />
-                  <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">
-                    DayBook Noticed
+            <div className="flex-1 min-h-0 flex flex-col gap-2 pt-0.5 overflow-hidden">
+              <div className="flex flex-col min-h-[46px] flex-auto max-h-[65%] overflow-hidden">
+                <div className="flex items-center justify-between flex-shrink-0 pb-1">
+                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Today&apos;s Goals
                   </span>
+                  {!isAddingGoal && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingGoal(true)}
+                      className="text-[10px] font-semibold text-[#4f8ee6] hover:text-[#3b79ce] flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                      <span>Add</span>
+                    </button>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void generateObservations()
-                  }}
-                  disabled={isGenerating || !!isLoading || !journal}
-                  className="text-[9px] font-medium text-[#4f8ee6] hover:text-[#5b9fe0] disabled:opacity-50 transition-colors cursor-pointer"
-                >
-                  {isGenerating
-                    ? 'Noticing...'
-                    : observations.length > 0
-                      ? 'Notice again'
-                      : 'Notice this entry'}
-                </button>
-              </div>
 
-              <div className="space-y-1 max-h-[68px] overflow-y-auto pr-0.5 scrollbar-none">
-                {isGenerating && (
-                  <p className="text-[9px] text-slate-400 italic flex items-center gap-1.5 py-0.5">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin text-[#4f8ee6]" />
-                    Reflecting on this entry...
-                  </p>
-                )}
-                {observations.length === 0 && !isGenerating && (
-                  <p className="text-[9px] text-slate-400 italic py-0.5">
-                    No observations yet for this entry.
-                  </p>
-                )}
-                {observations.map((observation) => (
-                  <div
-                    key={observation.id}
-                    className="p-1.5 sm:p-2 rounded-md bg-white border border-slate-200/60"
-                  >
-                    <div className="flex items-start gap-1.5">
-                      <span className="text-[8px] uppercase tracking-wider font-semibold text-[#4f8ee6] bg-[#eff6fc] rounded px-1 py-0.5 mt-0.5 flex-shrink-0">
-                        {observation.type}
-                      </span>
-                      <p className="text-[10px] text-slate-700 leading-snug">
-                        {observation.content}
-                      </p>
-                    </div>
+                {isAddingGoal && (
+                  <div className="flex items-center gap-1 pt-0.5 pb-1 flex-shrink-0">
+                    <input
+                      type="text"
+                      value={newGoalText}
+                      onChange={(e) => setNewGoalText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') addGoal()
+                        if (e.key === 'Escape') setIsAddingGoal(false)
+                      }}
+                      placeholder="Add todays goals here..."
+                      autoFocus
+                      className="flex-1 text-[10px] px-2 py-0.5 rounded bg-white border border-[#6eafe9] text-slate-700 focus:outline-none placeholder:text-slate-400 placeholder:italic"
+                    />
+                    <button
+                      type="button"
+                      onClick={addGoal}
+                      className="px-2 py-0.5 text-[10px] rounded bg-[#6eafe9] text-white font-medium cursor-pointer hover:bg-[#5b9fe0] transition-colors"
+                    >
+                      Add
+                    </button>
                   </div>
-                ))}
+                )}
+
+                <div className="space-y-1 overflow-y-auto pr-0.5 scrollbar-none flex-1 min-h-0 overscroll-contain">
+                  {goals.length === 0 && !isAddingGoal && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingGoal(true)}
+                      className="w-full flex items-center justify-between gap-1.5 p-1 sm:p-1.5 rounded-md bg-white/70 border border-dashed border-slate-300 hover:border-[#6eafe9] hover:bg-[#eff6fc]/40 text-slate-400 hover:text-[#4f8ee6] transition-all cursor-pointer group/placeholder"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="w-3 h-3 rounded border border-dashed border-slate-300 group-hover/placeholder:border-[#6eafe9] flex items-center justify-center flex-shrink-0" />
+                        <span className="text-[10px] italic">
+                          Add todays goals here
+                        </span>
+                      </div>
+                      <Plus className="w-2.5 h-2.5 opacity-60 group-hover/placeholder:opacity-100" />
+                    </button>
+                  )}
+
+                  {goals.map((g) => (
+                    <div
+                      key={g.id}
+                      className="flex items-center justify-between gap-1.5 p-1 rounded-md bg-white border border-slate-200/50 hover:border-slate-300/80 transition-colors group/goal"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleGoal(g.id)}
+                        className="flex items-center gap-1.5 min-w-0 flex-1 text-left cursor-pointer"
+                      >
+                        <div
+                          className={`w-3 h-3 rounded border flex items-center justify-center transition-colors flex-shrink-0 ${
+                            g.completed
+                              ? 'bg-[#6eafe9] border-[#6eafe9] text-white'
+                              : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {g.completed && <Check className="w-2 h-2 stroke-[3]" />}
+                        </div>
+                        <span
+                          className={`text-[10px] truncate transition-all ${
+                            g.completed
+                              ? 'line-through text-slate-400'
+                              : 'text-slate-700 font-medium'
+                          }`}
+                        >
+                          {g.text}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeGoal(g.id)}
+                        className="opacity-0 group-hover/goal:opacity-100 text-slate-400 hover:text-rose-500 transition-opacity p-0.5 cursor-pointer"
+                        title="Delete goal"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {goalError && (
+                  <p className="text-[10px] text-rose-600 pt-1 flex-shrink-0">
+                    Unable to save: {goalError}
+                  </p>
+                )}
               </div>
 
-              {observationError && (
-                <p className="text-[9px] text-rose-600 pt-1">
-                  Could not generate observations: {observationError}
+              <div className="flex flex-col min-h-[46px] flex-auto max-h-[65%] overflow-hidden pt-1.5 border-t border-slate-200/60">
+                <div className="flex items-center justify-between pb-1 flex-shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-[#4f8ee6]" />
+                    <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">
+                      DayBook Noticed
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
                       void generateObservations()
                     }}
-                    disabled={isGenerating}
-                    className="underline ml-1 cursor-pointer disabled:opacity-50"
+                    disabled={isGenerating || !!isLoading || !journal}
+                    className="text-[9px] font-medium text-[#4f8ee6] hover:text-[#5b9fe0] disabled:opacity-50 transition-colors cursor-pointer"
                   >
-                    Retry
+                    {isGenerating
+                      ? 'Noticing...'
+                      : observations.length > 0
+                        ? 'Notice again'
+                        : 'Notice this entry'}
                   </button>
-                </p>
-              )}
+                </div>
+
+                <div className="space-y-1 overflow-y-auto pr-0.5 scrollbar-none flex-1 min-h-0 overscroll-contain">
+                  {isGenerating && (
+                    <p className="text-[9px] text-slate-400 italic flex items-center gap-1.5 py-0.5">
+                      <Loader2 className="w-2.5 h-2.5 animate-spin text-[#4f8ee6]" />
+                      Reflecting on this entry...
+                    </p>
+                  )}
+                  {observations.length === 0 && !isGenerating && (
+                    <p className="text-[9px] text-slate-400 italic py-0.5">
+                      No observations yet for this entry.
+                    </p>
+                  )}
+                  {observations.map((observation) => (
+                    <div
+                      key={observation.id}
+                      className="p-1.5 sm:p-2 rounded-md bg-white border border-slate-200/60"
+                    >
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-[8px] uppercase tracking-wider font-semibold text-[#4f8ee6] bg-[#eff6fc] rounded px-1 py-0.5 mt-0.5 flex-shrink-0">
+                          {observation.type}
+                        </span>
+                        <p className="text-[10px] text-slate-700 leading-snug">
+                          {observation.content}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {observationError && (
+                  <p className="text-[9px] text-rose-600 pt-1 flex-shrink-0">
+                    Could not generate observations: {observationError}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void generateObservations()
+                      }}
+                      disabled={isGenerating}
+                      className="underline ml-1 cursor-pointer disabled:opacity-50"
+                    >
+                      Retry
+                    </button>
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
