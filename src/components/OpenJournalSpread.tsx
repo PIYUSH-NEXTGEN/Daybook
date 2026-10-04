@@ -30,6 +30,7 @@ import type {
   JournalObservation,
   MemorySuggestion,
   StoredMemory,
+  AiKnowledge,
 } from '../lib/api'
 import {
   createJournalGoal,
@@ -45,9 +46,16 @@ import {
   generateMemorySuggestions,
   confirmMemory,
   updateMemory,
+  getAiKnowledge,
 } from '../lib/api'
 
 type WeatherType = 'sunny' | 'partlyCloudy' | 'rainy' | 'windy' | 'snowy'
+
+const MEMORY_STATUS_MESSAGES = [
+  'Looking across your recent entries...',
+  'Checking for repeated patterns...',
+  'Finding things worth remembering...',
+];
 
 interface OpenJournalSpreadProps {
   onClose?: () => void
@@ -109,6 +117,10 @@ export function OpenJournalSpread({
   const [memoryError, setMemoryError] = useState<string | null>(null)
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
   const [memoryDraft, setMemoryDraft] = useState('')
+  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false)
+  const [memoryStatusIndex, setMemoryStatusIndex] = useState(0)
+  const [knowledge, setKnowledge] = useState<AiKnowledge | null>(null)
+  const [isKnowledgeOpen, setIsKnowledgeOpen] = useState(false)
   const [entryHtml, setEntryHtml] = useState('')
   const [entryText, setEntryText] = useState('')
   const [locationText, setLocationText] = useState('')
@@ -739,10 +751,37 @@ export function OpenJournalSpread({
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+
+    getAiKnowledge()
+      .then((value) => {
+        if (!cancelled) setKnowledge(value)
+      })
+      .catch(() => {
+        if (!cancelled) setKnowledge(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isSuggesting) return
+
+    const timer = setInterval(() => {
+      setMemoryStatusIndex((index) => (index + 1) % MEMORY_STATUS_MESSAGES.length)
+    }, 6500)
+
+    return () => clearInterval(timer)
+  }, [isSuggesting])
+
   async function findPatterns() {
     if (isSuggesting) return
 
     setIsSuggesting(true)
+    setMemoryStatusIndex(0)
     setMemoryError(null)
     try {
       setMemorySuggestions(await generateMemorySuggestions())
@@ -1209,6 +1248,15 @@ export function OpenJournalSpread({
                       DayBook Remembers
                     </span>
                     <span className="text-[9px] text-slate-400">{memories.length}</span>
+                    {(memories.length > 0 || memorySuggestions.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => setIsMemoryPanelOpen((open) => !open)}
+                        className="text-[9px] text-slate-400 hover:text-[#4f8ee6] cursor-pointer"
+                      >
+                        {isMemoryPanelOpen ? 'Show less' : 'Show all'}
+                      </button>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -1225,7 +1273,7 @@ export function OpenJournalSpread({
                 {isSuggesting && (
                   <p className="text-[9px] text-slate-400 italic flex items-center gap-1.5 pb-0.5">
                     <Loader2 className="w-2.5 h-2.5 animate-spin text-[#4f8ee6]" />
-                    Looking across your entries...
+                    {MEMORY_STATUS_MESSAGES[memoryStatusIndex]}
                   </p>
                 )}
 
@@ -1233,7 +1281,11 @@ export function OpenJournalSpread({
                   <p className="text-[9px] text-slate-400 italic">Nothing saved yet.</p>
                 )}
 
-                <div className="space-y-1 max-h-[58px] overflow-y-auto pr-0.5 scrollbar-none">
+                <div
+                  className={`space-y-1 overflow-y-auto pr-0.5 scrollbar-none ${
+                    isMemoryPanelOpen ? 'max-h-[210px]' : 'max-h-[58px]'
+                  }`}
+                >
                   {memorySuggestions.map((suggestion) => (
                     <div
                       key={suggestion.content}
@@ -1339,6 +1391,80 @@ export function OpenJournalSpread({
                       Retry
                     </button>
                   </p>
+                )}
+
+                {knowledge !== null && (
+                  <div className="pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsKnowledgeOpen((open) => !open)}
+                      className="text-[9px] text-slate-400 hover:text-[#4f8ee6] cursor-pointer"
+                    >
+                      {isKnowledgeOpen ? 'Hide what DayBook knows' : 'What DayBook knows about you'}
+                    </button>
+
+                    {isKnowledgeOpen && (
+                      <div className="mt-1 space-y-1.5 max-h-[150px] overflow-y-auto pr-0.5 scrollbar-none">
+                        <div className="p-1.5 rounded-md bg-white border border-slate-200/60">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-[#1a2b49]">
+                            You told DayBook
+                          </p>
+                          <ul className="mt-0.5 space-y-0.5 text-[10px] text-slate-600">
+                            {knowledge.profileFacts.length === 0 && (
+                              <li className="text-slate-400">No profile details yet.</li>
+                            )}
+                            {knowledge.profileFacts.map((fact) => (
+                              <li key={fact}>{fact}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="p-1.5 rounded-md bg-white border border-slate-200/60">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-[#1a2b49]">
+                            DayBook remembers
+                          </p>
+                          <ul className="mt-0.5 space-y-0.5 text-[10px] text-slate-600">
+                            {knowledge.memories.length === 0 && (
+                              <li className="text-slate-400">No confirmed memories yet.</li>
+                            )}
+                            {knowledge.memories.map((memory) => (
+                              <li key={memory.content}>{memory.content}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="p-1.5 rounded-md bg-white border border-slate-200/60">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-[#1a2b49]">
+                            DayBook noticed
+                          </p>
+                          <ul className="mt-0.5 space-y-0.5 text-[10px] text-slate-600">
+                            {knowledge.observations.length === 0 && (
+                              <li className="text-slate-400">No observations yet.</li>
+                            )}
+                            {knowledge.observations.map((observation) => (
+                              <li key={`${observation.date}-${observation.content}`}>
+                                <span className="text-slate-400">{observation.date}</span>{' '}
+                                {observation.content}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {knowledge.stillLearning.length > 0 && (
+                          <div className="p-1.5 rounded-md bg-white border border-slate-200/60">
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                              Still learning
+                            </p>
+                            <ul className="mt-0.5 space-y-0.5 text-[10px] text-slate-500">
+                              {knowledge.stillLearning.map((item) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

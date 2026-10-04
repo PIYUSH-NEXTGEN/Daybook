@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ArrowUp, Loader2, RotateCcw, Bot } from 'lucide-react'
-import { queryAI, type AiQueryResponse } from '../lib/api'
+import { queryAI, type AiQueryResponse, type ReflectionIntent } from '../lib/api'
 
 interface Message {
   id: string
@@ -17,7 +17,19 @@ const suggestions = [
   'Give me a thought-provoking prompt for today',
 ]
 
-export function AnalyticsAIView() {
+const INTENT_LABELS: Record<ReflectionIntent, string> = {
+  RECURRING_PATTERNS: 'Patterns',
+  MOOD_EMOTIONAL: 'Mood',
+  STRUGGLES: 'Struggles',
+  WINS_PROGRESS: 'Wins',
+  GOALS: 'Goals',
+  HABITS_ROUTINES: 'Habits',
+  CHANGE_OVER_TIME: 'Change over time',
+  SELF_UNDERSTANDING: 'Self-understanding',
+  GENERAL_REFLECTION: 'Reflection',
+}
+
+export function AnalyticsAIView({ selectedJournalDate }: { selectedJournalDate?: string }) {
   const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -62,7 +74,7 @@ export function AnalyticsAIView() {
     const requestId = ++requestIdRef.current
 
     try {
-      const result = await queryAI(text, undefined, controller.signal)
+      const result = await queryAI(text, selectedJournalDate, controller.signal)
       if (requestId !== requestIdRef.current) return
       const assistantMessage: Message = {
         id: nextId(),
@@ -163,6 +175,10 @@ export function AnalyticsAIView() {
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     ) : (
                       <div className="space-y-2.5">
+                        <span className="inline-block text-[9px] font-semibold uppercase tracking-wider text-[#4f8ee6] bg-[#eff6fc] rounded px-1.5 py-0.5">
+                          {INTENT_LABELS[reflection.intent]}
+                        </span>
+
                         <p className="whitespace-pre-wrap">{reflection.summary}</p>
 
                         {reflection.observations.length > 0 && (

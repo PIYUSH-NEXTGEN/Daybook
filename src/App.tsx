@@ -910,7 +910,7 @@ function App() {
                         </div>
 
                       {activeSidebarTab === 'Analytics' && (
-                        <AnalyticsAIView />
+                        <AnalyticsAIView selectedJournalDate={selectedJournalDate} />
                       )}
 
                       {activeSidebarTab === 'Calendar' && (

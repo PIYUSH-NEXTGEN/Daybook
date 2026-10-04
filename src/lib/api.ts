@@ -233,7 +233,19 @@ export interface AiObservation {
   evidence: AiEvidence[]
 }
 
+export type ReflectionIntent =
+  | 'RECURRING_PATTERNS'
+  | 'MOOD_EMOTIONAL'
+  | 'STRUGGLES'
+  | 'WINS_PROGRESS'
+  | 'GOALS'
+  | 'HABITS_ROUTINES'
+  | 'CHANGE_OVER_TIME'
+  | 'SELF_UNDERSTANDING'
+  | 'GENERAL_REFLECTION'
+
 export interface AiReflection {
+  intent: ReflectionIntent
   summary: string
   observations: AiObservation[]
   encouragement: string
@@ -397,6 +409,17 @@ export async function generateJournalObservations(
     },
   )
   return data.observations
+}
+
+export interface AiKnowledge {
+  profileFacts: string[]
+  memories: { type: string; content: string }[]
+  observations: { date: string; type: string; content: string }[]
+  stillLearning: string[]
+}
+
+export async function getAiKnowledge(): Promise<AiKnowledge> {
+  return request<AiKnowledge>('/api/ai/knowledge')
 }
 
 export type MemoryType = 'preference' | 'habit' | 'goal' | 'struggle' | 'routine' | 'context'
