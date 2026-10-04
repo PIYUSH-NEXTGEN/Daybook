@@ -4,6 +4,7 @@ import sceneImg from '../assets/images/scene.webp'
 import { OpenJournalSpread } from './OpenJournalSpread'
 import type { JournalTextStyle } from './journalTextStyle'
 import type { Journal, SaveJournalInput } from '../lib/api'
+import { getDailyQuote } from '../lib/api'
 
 interface InteractiveBookProps {
   isOpen: boolean
@@ -44,6 +45,9 @@ export function InteractiveBook({
   const [isFlipped, setIsFlipped] = useState(isOpen)
   const [isShifted, setIsShifted] = useState(isOpen)
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen)
+  const [dailyQuoteText, setDailyQuoteText] = useState('')
+  const dailyQuotePreview =
+    dailyQuoteText.length > 52 ? `${dailyQuoteText.slice(0, 52)}...` : dailyQuoteText
 
   if (prevIsOpen !== isOpen) {
     setPrevIsOpen(isOpen)
@@ -74,6 +78,22 @@ export function InteractiveBook({
       }
     }
   }, [stage])
+
+  useEffect(() => {
+    let cancelled = false
+
+    getDailyQuote()
+      .then((res) => {
+        if (!cancelled) setDailyQuoteText(res.quote.text)
+      })
+      .catch(() => {
+        if (!cancelled) setDailyQuoteText('')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (stage === 'open') {
     return (
@@ -157,7 +177,7 @@ export function InteractiveBook({
                 <span>Daily Prompt</span>
               </div>
               <p className="text-xs text-slate-600 italic leading-snug">
-                &ldquo;I slow down to hear the flowers bloom...&rdquo;
+                &ldquo;{dailyQuotePreview}&rdquo;
               </p>
             </div>
             <div className="space-y-2 pt-1">

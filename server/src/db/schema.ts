@@ -124,9 +124,9 @@ export const quotes = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    journalEntryId: text("journal_entry_id")
-      .notNull()
-      .references(() => journalEntries.id, { onDelete: "cascade" }),
+    journalEntryId: text("journal_entry_id").references(() => journalEntries.id, {
+      onDelete: "cascade",
+    }),
     text: text("text").notNull(),
     generatedAt: text("generated_at").notNull(),
   },

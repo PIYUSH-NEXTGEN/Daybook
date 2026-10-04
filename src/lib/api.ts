@@ -280,7 +280,10 @@ export interface AiQueryAnswerMap {
   journal_count: { journalEntryCount: number; from: string | null; to: string | null }
   recent_journal: { date: string; found: boolean; content: string | null }
   reflection: AiReflection
-  daily_quote: { text: string | null; generatedAt: string | null }
+  daily_quote: {
+    quote: { id: string; title: string; text: string; author: string; kind: 'curated' } | null
+    saved: boolean
+  }
   unsupported: { reason: string }
 }
 
@@ -305,6 +308,52 @@ export async function queryAI(
       ...(selectedJournalDate ? { selectedJournalDate } : {}),
     }),
     signal,
+  })
+}
+
+export interface DailyQuote {
+  id: string
+  title: string
+  text: string
+  author: string
+  kind: 'curated'
+}
+
+export interface DailyQuoteResponse {
+  date: string
+  quote: DailyQuote
+  saved: boolean
+}
+
+export interface SavedQuote {
+  id: string
+  text: string
+  title: string
+  author: string
+  likedAt: string
+}
+
+export async function getDailyQuote(date?: string): Promise<DailyQuoteResponse> {
+  const params = date ? `?${new URLSearchParams({ date })}` : ''
+  return request<DailyQuoteResponse>(`/api/quotes/daily${params}`)
+}
+
+export async function getSavedQuotes(): Promise<SavedQuote[]> {
+  const data = await request<{ quotes: SavedQuote[] }>('/api/quotes/saved')
+  return data.quotes
+}
+
+export async function saveQuote(quoteId: string): Promise<{ saved: boolean }> {
+  return request<{ saved: boolean }>(`/api/quotes/${encodeURIComponent(quoteId)}/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+}
+
+export async function unsaveQuote(quoteId: string): Promise<{ saved: boolean }> {
+  return request<{ saved: boolean }>(`/api/quotes/${encodeURIComponent(quoteId)}/save`, {
+    method: 'DELETE',
   })
 }
 

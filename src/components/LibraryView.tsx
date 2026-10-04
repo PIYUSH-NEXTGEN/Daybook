@@ -1,63 +1,38 @@
 import { useState, useEffect } from 'react'
 import { Headphones, Copy, Check, Heart } from 'lucide-react'
+import { getSavedQuotes, unsaveQuote, type SavedQuote } from '../lib/api'
 
-export interface SavedQuote {
-  id: string
-  title: string
-  text: string
-  time: string
+function formatLikedAt(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-const defaultQuotes: SavedQuote[] = [
-  {
-    id: 'quote-savor-moment',
-    title: 'Savor the Moment',
-    text: 'I slow down to hear the flowers bloom and feel the gentle touch of the breeze.',
-    time: '10:05 PM'
-  }
-]
-
 export function LibraryView() {
-  const [quotes, setQuotes] = useState<SavedQuote[]>(() => {
-    try {
-      const saved = localStorage.getItem('daybook_saved_quotes')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed
-        }
-      }
-      localStorage.setItem('daybook_saved_quotes', JSON.stringify(defaultQuotes))
-    } catch (e) {
-      void e
-    }
-    return defaultQuotes
-  })
-
+  const [quotes, setQuotes] = useState<SavedQuote[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    function handleQuotesUpdated() {
-      try {
-        const saved = localStorage.getItem('daybook_saved_quotes')
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed)) {
-            setQuotes(parsed)
-          }
-        } else {
-          setQuotes([])
-        }
-      } catch (e) {
-        void e
-      }
-    }
+    let cancelled = false
 
-    window.addEventListener('daybook_quotes_updated', handleQuotesUpdated)
-    window.addEventListener('storage', handleQuotesUpdated)
+    getSavedQuotes()
+      .then((saved) => {
+        if (!cancelled) setQuotes(saved)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load saved quotes')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
     return () => {
-      window.removeEventListener('daybook_quotes_updated', handleQuotesUpdated)
-      window.removeEventListener('storage', handleQuotesUpdated)
+      cancelled = true
     }
   }, [])
 
@@ -69,14 +44,17 @@ export function LibraryView() {
     }, 1500)
   }
 
-  function handleRemoveQuote(id: string) {
-    const updated = quotes.filter((q) => q.id !== id)
-    setQuotes(updated)
+  async function handleRemoveQuote(id: string) {
+    if (busyId !== null) return
+    setBusyId(id)
     try {
-      localStorage.setItem('daybook_saved_quotes', JSON.stringify(updated))
-      window.dispatchEvent(new Event('daybook_quotes_updated'))
-    } catch (e) {
-      void e
+      await unsaveQuote(id)
+      setQuotes((prev) => prev.filter((quote) => quote.id !== id))
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove quote')
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -92,7 +70,11 @@ export function LibraryView() {
           </span>
         </div>
 
-        {quotes.length === 0 ? (
+        {isLoading ? (
+          <div className="bg-[#FAF9F5] rounded-2xl border border-dashed border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-400">Loading your saved quotes...</p>
+          </div>
+        ) : quotes.length === 0 ? (
           <div className="bg-[#FAF9F5] rounded-2xl border border-dashed border-slate-200 p-4 text-center">
             <p className="text-xs text-slate-400">
               No saved quotes yet. Click the heart on daily quotes to save them here.
@@ -115,13 +97,17 @@ export function LibraryView() {
                       </span>
                     </div>
                     <span className="text-[10px] font-semibold text-slate-400">
-                      {quote.time}
+                      {formatLikedAt(quote.likedAt)}
                     </span>
                   </div>
 
                   <p className="text-xs sm:text-sm font-medium text-slate-700 leading-snug text-center py-1 px-2 italic">
                     &ldquo;{quote.text}&rdquo;
                   </p>
+
+                  {quote.author && (
+                    <p className="text-[10px] text-center text-slate-400">- {quote.author}</p>
+                  )}
 
                   <div className="flex items-center justify-center gap-4 pt-1 text-slate-400 border-t border-slate-200/50">
                     <button
@@ -139,7 +125,8 @@ export function LibraryView() {
                     <button
                       type="button"
                       onClick={() => handleRemoveQuote(quote.id)}
-                      className="text-rose-500 hover:text-rose-600 transition-colors p-1 cursor-pointer"
+                      disabled={busyId === quote.id}
+                      className="text-rose-500 hover:text-rose-600 transition-colors p-1 cursor-pointer disabled:opacity-50"
                       title="Saved in Library (click to remove)"
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500" />
@@ -149,6 +136,10 @@ export function LibraryView() {
               )
             })}
           </div>
+        )}
+
+        {error && (
+          <p className="text-[11px] text-center text-rose-600">{error}</p>
         )}
       </div>
     </div>

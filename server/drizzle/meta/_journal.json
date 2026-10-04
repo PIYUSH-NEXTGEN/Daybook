@@ -15,6 +15,13 @@
       "when": 1791052529694,
       "tag": "0001_perpetual_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791109642455,
+      "tag": "0002_quotes_nullable_journal_entry",
+      "breakpoints": true
     }
   ]
 }

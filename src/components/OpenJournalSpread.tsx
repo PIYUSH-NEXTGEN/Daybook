@@ -18,11 +18,14 @@ import {
 } from 'lucide-react'
 import defaultPhoto from '../assets/images/scene.webp'
 import type { JournalTextStyle } from './journalTextStyle'
-import type { Journal, SaveJournalInput, JournalGoal } from '../lib/api'
+import type { Journal, SaveJournalInput, JournalGoal, DailyQuoteResponse } from '../lib/api'
 import {
   createJournalGoal,
   deleteJournalGoal,
+  getDailyQuote,
   getJournalGoals,
+  saveQuote,
+  unsaveQuote,
   updateJournalGoal,
 } from '../lib/api'
 
@@ -69,20 +72,12 @@ export function OpenJournalSpread({
   const [goalError, setGoalError] = useState<string | null>(null)
   const [goalsRefreshToken, setGoalsRefreshToken] = useState(0)
   const [isCopied, setIsCopied] = useState(false)
-  const [isFavorited, setIsFavorited] = useState(() => {
-    try {
-      const saved = localStorage.getItem('daybook_saved_quotes')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) {
-          return parsed.some((q: { id: string }) => q.id === 'quote-savor-moment')
-        }
-      }
-    } catch (e) {
-      void e
-    }
-    return true
-  })
+  const [quoteState, setQuoteState] = useState<{
+    date: string
+    value: DailyQuoteResponse | null
+  } | null>(null)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [isSavingQuote, setIsSavingQuote] = useState(false)
   const [entryHtml, setEntryHtml] = useState('')
   const [entryText, setEntryText] = useState('')
   const [locationText, setLocationText] = useState('')
@@ -91,6 +86,7 @@ export function OpenJournalSpread({
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const weatherDropdownRef = useRef<HTMLDivElement>(null)
+  const dailyQuote = entryDate && quoteState?.date === entryDate ? quoteState.value : null
 
   const displayDate = entryDate
     ? (() => {
@@ -596,79 +592,58 @@ export function OpenJournalSpread({
   }
 
   function copyPromptText() {
-    const promptText =
-      'I slow down to hear the flowers bloom and feel the gentle touch of the breeze.'
-    navigator.clipboard.writeText(promptText)
+    if (!dailyQuote) return
+    navigator.clipboard.writeText(dailyQuote.quote.text)
     setIsCopied(true)
     setTimeout(() => setIsCopied(false), 2000)
   }
 
   useEffect(() => {
-    function handleQuotesUpdated() {
-      try {
-        const saved = localStorage.getItem('daybook_saved_quotes')
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed)) {
-            setIsFavorited(parsed.some((q: { id: string }) => q.id === 'quote-savor-moment'))
-            return
-          }
+    if (!entryDate) return
+
+    let cancelled = false
+
+    getDailyQuote(entryDate)
+      .then((res) => {
+        if (!cancelled) {
+          setQuoteState({ date: entryDate, value: res })
+          setQuoteError(null)
         }
-        setIsFavorited(false)
-      } catch (e) {
-        void e
-      }
-    }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setQuoteState({ date: entryDate, value: null })
+          setQuoteError(err instanceof Error ? err.message : 'Failed to load quote')
+        }
+      })
 
-    handleQuotesUpdated()
-    window.addEventListener('daybook_quotes_updated', handleQuotesUpdated)
-    window.addEventListener('storage', handleQuotesUpdated)
     return () => {
-      window.removeEventListener('daybook_quotes_updated', handleQuotesUpdated)
-      window.removeEventListener('storage', handleQuotesUpdated)
+      cancelled = true
     }
-  }, [])
+  }, [entryDate])
 
-  function handleToggleFavoriteQuote(e?: React.MouseEvent) {
+  async function handleToggleFavoriteQuote(e?: React.MouseEvent) {
     if (e) {
       e.preventDefault()
       e.stopPropagation()
     }
+    if (isSavingQuote || !dailyQuote || !entryDate) return
 
-    let next = false
+    setIsSavingQuote(true)
     try {
-      let quotes: { id: string; title: string; text: string; time: string }[] = []
-      const saved = localStorage.getItem('daybook_saved_quotes')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) {
-          quotes = parsed
-        }
-      }
-      const isCurrentlySaved = quotes.some((q) => q.id === 'quote-savor-moment')
-      next = !isCurrentlySaved
-
-      if (next) {
-        quotes = [
-          {
-            id: 'quote-savor-moment',
-            title: 'Savor the Moment',
-            text: 'I slow down to hear the flowers bloom and feel the gentle touch of the breeze.',
-            time: currentTimeString || '10:05 PM'
-          },
-          ...quotes.filter((q) => q.id !== 'quote-savor-moment')
-        ]
+      if (dailyQuote.saved) {
+        await unsaveQuote(dailyQuote.quote.id)
+        setQuoteState({ date: entryDate, value: { ...dailyQuote, saved: false } })
       } else {
-        quotes = quotes.filter((q) => q.id !== 'quote-savor-moment')
+        await saveQuote(dailyQuote.quote.id)
+        setQuoteState({ date: entryDate, value: { ...dailyQuote, saved: true } })
       }
-
-      localStorage.setItem('daybook_saved_quotes', JSON.stringify(quotes))
-    } catch (e) {
-      void e
+      setQuoteError(null)
+    } catch (err) {
+      setQuoteError(err instanceof Error ? err.message : 'Failed to save quote')
+    } finally {
+      setIsSavingQuote(false)
     }
-
-    setIsFavorited(next)
-    window.dispatchEvent(new Event('daybook_quotes_updated'))
   }
 
   const handleSave = async () => {
@@ -1012,7 +987,7 @@ export function OpenJournalSpread({
                 <div className="flex items-center gap-1.5 text-slate-600">
                   <Headphones className="w-3.5 h-3.5 text-[#4f8ee6]" />
                   <span className="text-[10px] sm:text-xs font-bold text-slate-700">
-                    Savor the Moment
+                    {dailyQuote?.quote.title ?? 'Daily Quote'}
                   </span>
                 </div>
                 <span className="text-[10px] font-semibold text-slate-400">
@@ -1021,8 +996,16 @@ export function OpenJournalSpread({
               </div>
 
               <p className="text-[11px] sm:text-xs font-medium text-slate-700 leading-snug text-center py-1 sm:py-1.5 px-1 italic">
-                &ldquo;I slow down to hear the flowers bloom and feel the gentle touch of the breeze.&rdquo;
+                {dailyQuote === null ? (
+                  'Loading daily quote...'
+                ) : (
+                  <>&ldquo;{dailyQuote.quote.text}&rdquo;</>
+                )}
               </p>
+
+              {dailyQuote?.quote.author && (
+                <p className="text-[10px] text-center text-slate-400">- {dailyQuote.quote.author}</p>
+              )}
 
               <div className="flex items-center justify-center gap-4 pt-0.5 text-slate-400">
                 <button
@@ -1040,17 +1023,21 @@ export function OpenJournalSpread({
                 <button
                   type="button"
                   onClick={handleToggleFavoriteQuote}
-                  className={`p-1 rounded-md transition-colors cursor-pointer flex items-center justify-center ${
-                    isFavorited
+                  disabled={isSavingQuote || dailyQuote === null}
+                  className={`p-1 rounded-md transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50 ${
+                    dailyQuote?.saved
                       ? 'text-rose-500 fill-rose-500 hover:text-rose-600'
                       : 'text-slate-400 hover:text-rose-500'
                   }`}
-                  aria-label={isFavorited ? 'Unlike quote' : 'Like quote'}
-                  title={isFavorited ? 'Unlike quote' : 'Like quote'}
+                  aria-label={dailyQuote?.saved ? 'Unlike quote' : 'Like quote'}
+                  title={dailyQuote?.saved ? 'Unlike quote' : 'Like quote'}
                 >
-                  <Heart className={`w-3.5 h-3.5 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 ${dailyQuote?.saved ? 'fill-rose-500' : ''}`} />
                 </button>
               </div>
+              {quoteError && (
+                <p className="text-[10px] text-center text-rose-600">{quoteError}</p>
+              )}
             </div>
 
             <div className="flex-1 flex flex-col min-h-0 space-y-1">

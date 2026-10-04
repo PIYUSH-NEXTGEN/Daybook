@@ -4,7 +4,7 @@ import { and, eq, gte, inArray, lte, lt, asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Ollama } from "ollama";
 import { db } from "./db/client.js";
-import { appSettings, journalEntries, journalGoals, localSessions, quotes, userProfiles, users } from "./db/schema.js";
+import { appSettings, journalEntries, journalGoals, localSessions, quotes, savedQuotes, userProfiles, users } from "./db/schema.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -1315,7 +1315,10 @@ interface AiQueryAnswerMap {
   journal_count: { journalEntryCount: number; from: string | null; to: string | null };
   recent_journal: { date: string; found: boolean; content: string | null };
   reflection: AiReflectionPayload;
-  daily_quote: { text: string | null; generatedAt: string | null };
+  daily_quote: {
+    quote: { id: string; title: string; text: string; author: string; kind: "curated" } | null;
+    saved: boolean;
+  };
   unsupported: { reason: string };
 }
 
@@ -1600,21 +1603,23 @@ app.post("/api/ai/query", async (request, reply) => {
     }
 
     if (intent === "DAILY_QUOTE") {
-      const quote = db
-        .select({ text: quotes.text, generatedAt: quotes.generatedAt })
-        .from(quotes)
-        .where(eq(quotes.userId, user.id))
-        .orderBy(desc(quotes.generatedAt))
-        .limit(1)
-        .all()[0];
+      const dateKey = toLocalDateKey(new Date());
+      const daily = getDailyQuote(dateKey);
+      const rowId = quoteRowId(user.id, daily.id);
       const answer: AiQueryAnswerMap["daily_quote"] = {
-        text: quote?.text ?? null,
-        generatedAt: quote?.generatedAt ?? null,
+        quote: {
+          id: rowId,
+          title: daily.title,
+          text: daily.text,
+          author: daily.author,
+          kind: "curated",
+        },
+        saved: isQuoteSaved(user.id, rowId),
       };
       const response: AiQueryResponse<"daily_quote"> = {
         type: "daily_quote",
         answer,
-        displayText: answer.text === null ? "No daily quote is available yet." : answer.text,
+        displayText: `${daily.text}\n\n${daily.title} - ${daily.author}`,
       };
       return reply.send(response);
     }
@@ -1629,6 +1634,218 @@ app.post("/api/ai/query", async (request, reply) => {
   } catch {
     return reply.code(500).send({ error: "Could not read your journal data." });
   }
+});
+
+
+interface CuratedQuote {
+  id: string;
+  title: string;
+  text: string;
+  author: string;
+}
+
+const CURATED_QUOTES: CuratedQuote[] = [
+  {
+    id: "frost-servant-to-servants",
+    title: "The Only Way Out",
+    text: "The only way out is through.",
+    author: "Robert Frost",
+  },
+  {
+    id: "dillard-writing-life",
+    title: "How We Spend Our Days",
+    text: "How we spend our days is, of course, how we spend our lives.",
+    author: "Annie Dillard",
+  },
+  {
+    id: "oliver-upstream",
+    title: "Attention",
+    text: "Attention is the beginning of devotion.",
+    author: "Mary Oliver",
+  },
+  {
+    id: "radmacher-courage",
+    title: "Courage",
+    text: "Courage doesn't always roar.",
+    author: "Mary Anne Radmacher",
+  },
+  {
+    id: "proverb-second-best-time",
+    title: "The Second Best Time",
+    text: "The best time to plant a tree was twenty years ago. The second best time is now.",
+    author: "Chinese proverb",
+  },
+  {
+    id: "goethe-this-day",
+    title: "This Day",
+    text: "Nothing is worth more than this day.",
+    author: "Johann Wolfgang von Goethe",
+  },
+  {
+    id: "seneca-shortness-of-life",
+    title: "On Time",
+    text: "It is not that we have a short time to live, but that we waste much of it.",
+    author: "Seneca",
+  },
+];
+
+function getDailyQuote(dateKey: string): CuratedQuote {
+  const size = CURATED_QUOTES.length;
+  const index = ((toDayIndex(dateKey) % size) + size) % size;
+  return CURATED_QUOTES[index];
+}
+
+function quoteRowId(userId: string, catalogId: string): string {
+  return `${userId}:${catalogId}`;
+}
+
+function findCuratedQuoteByRowId(userId: string, rowId: string): CuratedQuote | null {
+  const prefix = `${userId}:`;
+  if (!rowId.startsWith(prefix)) return null;
+  const catalogId = rowId.slice(prefix.length);
+  return CURATED_QUOTES.find((quote) => quote.id === catalogId) ?? null;
+}
+
+function isQuoteSaved(userId: string, rowId: string): boolean {
+  return (
+    db
+      .select({ id: savedQuotes.id })
+      .from(savedQuotes)
+      .where(and(eq(savedQuotes.userId, userId), eq(savedQuotes.quoteId, rowId)))
+      .limit(1)
+      .all()[0] !== undefined
+  );
+}
+
+const dailyQuoteQuery = z.object({
+  date: z
+    .string()
+    .refine(isValidJournalDate, "Invalid date, expected YYYY-MM-DD")
+    .optional(),
+});
+
+app.get("/api/quotes/daily", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const parsed = dailyQuoteQuery.safeParse(request.query);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+
+  const dateKey = parsed.data.date ?? toLocalDateKey(new Date());
+  const quote = getDailyQuote(dateKey);
+
+  return reply.send({
+    date: dateKey,
+    quote: {
+      id: quoteRowId(user.id, quote.id),
+      title: quote.title,
+      text: quote.text,
+      author: quote.author,
+      kind: "curated" as const,
+    },
+    saved: isQuoteSaved(user.id, quoteRowId(user.id, quote.id)),
+  });
+});
+
+app.get("/api/quotes/saved", async (_request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const rows = db
+    .select({ rowId: quotes.id, text: quotes.text, likedAt: savedQuotes.likedAt })
+    .from(savedQuotes)
+    .innerJoin(quotes, eq(savedQuotes.quoteId, quotes.id))
+    .where(eq(savedQuotes.userId, user.id))
+    .orderBy(desc(savedQuotes.likedAt))
+    .all();
+
+  return reply.send({
+    quotes: rows.map((row) => {
+      const quote = findCuratedQuoteByRowId(user.id, row.rowId);
+      return {
+        id: row.rowId,
+        text: row.text,
+        title: quote?.title ?? "Saved quote",
+        author: quote?.author ?? "",
+        likedAt: row.likedAt,
+      };
+    }),
+  });
+});
+
+app.post("/api/quotes/:quoteId/save", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const params = request.params as { quoteId?: string };
+  const rowId = params.quoteId ?? "";
+  const quote = findCuratedQuoteByRowId(user.id, rowId);
+  if (quote === null) {
+    return reply.code(404).send({ error: "Quote not found" });
+  }
+
+  const existing = db
+    .select({ id: savedQuotes.id })
+    .from(savedQuotes)
+    .where(and(eq(savedQuotes.userId, user.id), eq(savedQuotes.quoteId, rowId)))
+    .limit(1)
+    .all()[0];
+  if (existing !== undefined) {
+    return reply.send({ saved: true });
+  }
+
+  const now = nowIso();
+  db.transaction((tx) => {
+    const quoteRow = tx.select().from(quotes).where(eq(quotes.id, rowId)).limit(1).all()[0];
+    if (quoteRow === undefined) {
+      tx.insert(quotes)
+        .values({
+          id: rowId,
+          userId: user.id,
+          journalEntryId: null,
+          text: quote.text,
+          generatedAt: now,
+        })
+        .run();
+    }
+    tx.insert(savedQuotes)
+      .values({
+        id: randomUUID(),
+        userId: user.id,
+        quoteId: rowId,
+        likedAt: now,
+      })
+      .run();
+  });
+
+  return reply.send({ saved: true });
+});
+
+app.delete("/api/quotes/:quoteId/save", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const params = request.params as { quoteId?: string };
+  const rowId = params.quoteId ?? "";
+  if (findCuratedQuoteByRowId(user.id, rowId) === null) {
+    return reply.code(404).send({ error: "Quote not found" });
+  }
+
+  db.delete(savedQuotes)
+    .where(and(eq(savedQuotes.userId, user.id), eq(savedQuotes.quoteId, rowId)))
+    .run();
+
+  return reply.send({ saved: false });
 });
 
 app.listen({ port: PORT, host: "127.0.0.1" }).then(() => {
