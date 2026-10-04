@@ -280,6 +280,43 @@ function isValidJournalDate(value: string): boolean {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
+function toDayIndex(value: string): number {
+  const [y, m, d] = value.split("-").map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+}
+
+function toLocalDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function calculateCurrentStreak(journalDates: string[], todayKey: string): number {
+  if (!isValidJournalDate(todayKey)) return 0;
+
+  const today = toDayIndex(todayKey);
+  const days = new Set<number>();
+
+  for (const value of journalDates) {
+    if (!isValidJournalDate(value)) continue;
+    const index = toDayIndex(value);
+    if (index > today) continue;
+    days.add(index);
+  }
+
+  if (!days.has(today)) return 0;
+
+  let streak = 0;
+  let cursor = today;
+  while (days.has(cursor)) {
+    streak++;
+    cursor--;
+  }
+
+  return streak;
+}
+
 function toJournalResponse(row: typeof journalEntries.$inferSelect) {
   return {
     id: row.id,
@@ -769,6 +806,26 @@ app.delete("/api/journals/:date/goals/:goalId", async (request, reply) => {
   db.delete(journalGoals).where(eq(journalGoals.id, goalId)).run();
 
   return reply.send({ deleted: true });
+});
+
+app.get("/api/stats/streak", async (_request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const rows = db
+    .select({ entryDate: journalEntries.entryDate })
+    .from(journalEntries)
+    .where(eq(journalEntries.userId, user.id))
+    .all();
+
+  const currentStreak = calculateCurrentStreak(
+    rows.map((row) => row.entryDate),
+    toLocalDateKey(new Date()),
+  );
+
+  return reply.send({ currentStreak });
 });
 
 app.listen({ port: PORT, host: "127.0.0.1" }).then(() => {

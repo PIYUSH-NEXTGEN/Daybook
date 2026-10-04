@@ -33,6 +33,7 @@ interface OpenJournalSpreadProps {
   className?: string
   textStyle?: JournalTextStyle
   entryDate?: string
+  streak: number | null
   journal?: Journal | null
   isLoading?: boolean
   error?: string | null
@@ -46,6 +47,7 @@ export function OpenJournalSpread({
   className = '',
   textStyle,
   entryDate,
+  streak,
   journal,
   isLoading,
   error,
@@ -992,7 +994,7 @@ export function OpenJournalSpread({
               <Flame className="w-2.5 h-2.5 fill-amber-500" />
             </div>
             <span className="text-[11px] font-bold text-slate-800">
-              5 Day Streak
+              {streak ?? '--'} Day Streak
             </span>
           </div>
         </div>

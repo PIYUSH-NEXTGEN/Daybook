@@ -14,6 +14,7 @@ interface InteractiveBookProps {
   entryDate?: string
   journal?: Journal | null
   journalLoading?: boolean
+  streak: number | null
   journalError?: string | null
   saveState?: 'idle' | 'saving' | 'saved' | 'error'
   saveError?: string | null
@@ -35,6 +36,7 @@ export function InteractiveBook({
   saveError,
   onSaveJournal,
   onDeleteJournal,
+  streak,
 }: InteractiveBookProps) {
   const [stage, setStage] = useState<'closed' | 'opening' | 'open' | 'closing'>(
     isOpen ? 'open' : 'closed'
@@ -80,6 +82,7 @@ export function InteractiveBook({
           onClose={onClose}
           textStyle={textStyle}
           entryDate={entryDate}
+          streak={streak}
           journal={journal}
           isLoading={journalLoading}
           error={journalError}
@@ -298,7 +301,7 @@ export function InteractiveBook({
             </div>
             <div className="pt-2 border-t border-slate-200/60 flex items-center gap-1.5 text-[10px] font-bold text-amber-500">
               <Flame className="w-3.5 h-3.5 fill-amber-500" />
-              <span>5 Day Streak</span>
+              <span>{streak ?? '--'} Day Streak</span>
             </div>
           </div>
 

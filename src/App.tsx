@@ -26,6 +26,7 @@ import {
   saveJournal,
   deleteJournal,
   getJournalDates,
+  getCurrentStreak,
   type Journal,
   type LocalUser,
   type SaveJournalInput,
@@ -202,6 +203,11 @@ const INITIAL_JOURNAL_STATE: JournalState = {
 
 const NO_JOURNAL_DATES: string[] = []
 
+interface StreakState {
+  userId: string
+  value: number | null
+}
+
 function App() {
   const [activePage, setActivePage] = useState<NavItem>('Home')
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('Book')
@@ -230,6 +236,7 @@ function App() {
   const [selectedJournalDate, setSelectedJournalDate] = useState<string>(() => toDateKey(new Date()))
   const [journalState, setJournalState] = useState<JournalState>(INITIAL_JOURNAL_STATE)
   const [journalDatesState, setJournalDatesState] = useState<JournalDatesState | null>(null)
+  const [streakState, setStreakState] = useState<StreakState | null>(null)
   const journalFetchIdRef = useRef(0)
 
   const isJournalLoaded = journalState.date === selectedJournalDate
@@ -242,6 +249,8 @@ function App() {
     currentUser !== null && journalDatesState?.userId === currentUser.id
       ? journalDatesState.dates
       : NO_JOURNAL_DATES
+  const currentStreak =
+    currentUser !== null && streakState?.userId === currentUser.id ? streakState.value : null
 
   const userMenuRef = useRef<HTMLDivElement>(null)
   const openingFromAboutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -552,6 +561,23 @@ function App() {
         if (!cancelled) setJournalDatesState({ userId: currentUser.id, dates })
       })
       .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser, isCheckingUser, journal?.updatedAt])
+
+  useEffect(() => {
+    if (!currentUser || isCheckingUser) return
+
+    let cancelled = false
+    getCurrentStreak()
+      .then((res) => {
+        if (!cancelled) setStreakState({ userId: currentUser.id, value: res.currentStreak })
+      })
+      .catch(() => {
+        if (!cancelled) setStreakState({ userId: currentUser.id, value: null })
+      })
 
     return () => {
       cancelled = true
@@ -936,6 +962,7 @@ function App() {
                 }
                 textStyle={textStyle}
                 entryDate={selectedJournalDate}
+                streak={currentStreak}
                 journal={journal}
                 journalLoading={journalLoading}
                 journalError={journalError}

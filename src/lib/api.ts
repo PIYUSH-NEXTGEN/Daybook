@@ -203,3 +203,15 @@ export async function getJournalDates(from: string, to: string): Promise<string[
   return data.dates
 }
 
+export interface StreakResponse {
+  currentStreak: number
+}
+
+export async function getCurrentStreak(): Promise<StreakResponse> {
+  const res = await fetch('/api/stats/streak')
+  if (!res.ok) {
+    throw new Error(`Failed to load streak: ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as StreakResponse
+}
+
