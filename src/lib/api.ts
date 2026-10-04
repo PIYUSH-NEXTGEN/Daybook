@@ -399,3 +399,69 @@ export async function generateJournalObservations(
   return data.observations
 }
 
+export type MemoryType = 'preference' | 'habit' | 'goal' | 'struggle' | 'routine' | 'context'
+
+export interface MemoryEvidence {
+  date: string
+  observation: string
+}
+
+export interface MemorySuggestion {
+  type: MemoryType
+  content: string
+  confidence: number
+  evidence: MemoryEvidence[]
+}
+
+export interface StoredMemory {
+  id: string
+  type: string
+  content: string
+  status: string
+  confidence: number | null
+  sourceJournalId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export async function generateMemorySuggestions(signal?: AbortSignal): Promise<MemorySuggestion[]> {
+  const data = await request<{ suggestions: MemorySuggestion[] }>('/api/memories/suggestions/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+    signal,
+  })
+  return data.suggestions
+}
+
+export async function getMemories(status?: 'active' | 'archived'): Promise<StoredMemory[]> {
+  const params = status === undefined ? '' : `?status=${status}`
+  const data = await request<{ memories: StoredMemory[] }>(`/api/memories${params}`)
+  return data.memories
+}
+
+export async function confirmMemory(input: {
+  type: MemoryType
+  content: string
+  confidence?: number
+  sourceJournalId?: string | null
+}): Promise<{ memory: StoredMemory; duplicate: boolean }> {
+  return request<{ memory: StoredMemory; duplicate: boolean }>('/api/memories', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updateMemory(
+  memoryId: string,
+  patch: { content?: string; status?: 'active' | 'archived' },
+): Promise<StoredMemory> {
+  const data = await request<{ memory: StoredMemory }>(`/api/memories/${encodeURIComponent(memoryId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  return data.memory
+}
+

@@ -4,7 +4,7 @@ import { and, eq, gte, inArray, lte, lt, asc, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Ollama } from "ollama";
 import { db } from "./db/client.js";
-import { appSettings, journalEntries, journalGoals, journalObservations, localSessions, quotes, savedQuotes, userProfiles, users } from "./db/schema.js";
+import { appSettings, journalEntries, journalGoals, journalObservations, localSessions, memories, quotes, savedQuotes, userProfiles, users } from "./db/schema.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -905,6 +905,7 @@ interface AiContext {
     goalCompletionRate: number;
   };
   journals: AiContextJournal[];
+  memories: { type: string; content: string }[];
 }
 
 function toPlainText(html: string): string {
@@ -989,6 +990,13 @@ function buildAiContext(user: typeof users.$inferSelect): AiContext {
 
   const completedGoalCount = recentGoals.filter((goal) => goal.completed).length;
 
+  const activeMemories = db
+    .select({ type: memories.type, content: memories.content })
+    .from(memories)
+    .where(and(eq(memories.userId, user.id), eq(memories.status, "active")))
+    .orderBy(desc(memories.updatedAt))
+    .all();
+
   return {
     truncated,
     profile: {
@@ -1017,6 +1025,7 @@ function buildAiContext(user: typeof users.$inferSelect): AiContext {
           : 0,
     },
     journals,
+    memories: activeMemories,
   };
 }
 
@@ -1096,6 +1105,13 @@ function buildAiSystemPrompt(context: AiContext): string {
     "",
     "USER PROFILE",
     profileLines.length > 0 ? profileLines.join("\n") : "(no profile information)",
+    "",
+    "CONFIRMED MEMORIES",
+    "These are facts the user explicitly approved DayBook remember. Treat them as trusted context.",
+    "Do not invent additional memories here and do not propose new ones in this answer.",
+    context.memories.length > 0
+      ? context.memories.map((memory) => `  - ${memory.type}: ${memory.content}`).join("\n")
+      : "(no confirmed memories yet)",
     "",
     "APPLICATION CALCULATED STATISTICS",
     statLines.join("\n"),
@@ -2160,6 +2176,538 @@ app.post("/api/journals/:date/observations/generate", async (request, reply) => 
   });
 
   return reply.send({ observations: created });
+});
+
+
+const MEMORY_TYPES = ["preference", "habit", "goal", "struggle", "routine", "context"] as const;
+
+type MemoryType = (typeof MEMORY_TYPES)[number];
+
+const memorySuggestionSchema = z.object({
+  type: z.enum(MEMORY_TYPES),
+  content: z.string().trim().min(1).max(300),
+  confidence: z.number().min(0).max(1),
+  evidence: z.array(
+    z.object({
+      date: z.string(),
+      observation: z.string(),
+    }),
+  ),
+});
+
+const memorySuggestionPayloadSchema = z.object({
+  suggestions: z.array(memorySuggestionSchema),
+});
+
+const MEMORY_PERMANENT_CLAIM_PATTERNS: RegExp[] = [
+  /\byou(?:'re| are)\s+(?:a|an)\s+\w+/i,
+  /\byou\s+(?:always|never)\s+\w+/i,
+  /\b(?:always|never|constantly|consistently)\s+\w+/i,
+];
+
+const MIN_MEMORY_EVIDENCE_DATES = 2;
+
+function normalizeMemoryContent(content: string): string {
+  return content.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+interface MemorySuggestionEvidence {
+  date: string;
+  observation: string;
+}
+
+interface MemorySuggestion {
+  type: MemoryType;
+  content: string;
+  confidence: number;
+  evidence: MemorySuggestionEvidence[];
+}
+
+interface MemoryEvidenceIndex {
+  observationTextByDate: Map<string, string[]>;
+  journalTextByDate: Map<string, string>;
+}
+
+function buildMemoryEvidenceIndex(userId: string): MemoryEvidenceIndex {
+  const entries = db
+    .select({ id: journalEntries.id, entryDate: journalEntries.entryDate, content: journalEntries.content })
+    .from(journalEntries)
+    .where(eq(journalEntries.userId, userId))
+    .all();
+
+  const entryIds = entries.map((entry) => entry.id);
+
+  const observations =
+    entryIds.length > 0
+      ? db
+          .select({
+            journalEntryId: journalObservations.journalEntryId,
+            content: journalObservations.content,
+          })
+          .from(journalObservations)
+          .where(
+            and(
+              eq(journalObservations.userId, userId),
+              inArray(journalObservations.journalEntryId, entryIds),
+            ),
+          )
+          .all()
+      : [];
+
+  const dateByEntryId = new Map(entries.map((entry) => [entry.id, entry.entryDate]));
+  const observationTextByDate = new Map<string, string[]>();
+  for (const observation of observations) {
+    const date = dateByEntryId.get(observation.journalEntryId);
+    if (date === undefined) continue;
+    const list = observationTextByDate.get(date);
+    if (list === undefined) {
+      observationTextByDate.set(date, [observation.content]);
+    } else {
+      list.push(observation.content);
+    }
+  }
+
+  return {
+    observationTextByDate,
+    journalTextByDate: new Map(
+      entries.map((entry) => [entry.entryDate, normalizeForMatch(toPlainText(entry.content))]),
+    ),
+  };
+}
+
+const EVIDENCE_STOP_WORDS: Record<string, true> = {
+  the: true, and: true, for: true, with: true, was: true, were: true, this: true, that: true, they: true,
+  their: true, but: true, not: true, from: true, had: true, has: true, have: true, been: true, into: true,
+  than: true, then: true, when: true, what: true, while: true, will: true, would: true, could: true,
+  should: true, about: true, after: true, before: true, just: true, very: true, some: true, more: true,
+  most: true, only: true, also: true, there: true, them: true, does: true, done: true,
+};
+
+const MIN_EVIDENCE_TOKEN_OVERLAP = 0.6;
+
+function evidenceMatchesSource(storedText: string, candidateText: string): boolean {
+  const stored = normalizeForMatch(storedText);
+  const candidate = normalizeForMatch(candidateText);
+  if (candidate === "") return false;
+  if (stored.includes(candidate) || candidate.includes(stored)) return true;
+
+  const storedTokens = new Set(
+    stored.split(" ").filter((token) => token.length > 2 && !EVIDENCE_STOP_WORDS[token]),
+  );
+  const candidateTokens = candidate
+    .split(" ")
+    .filter((token) => token.length > 2 && !EVIDENCE_STOP_WORDS[token]);
+  if (candidateTokens.length === 0) return false;
+
+  const shared = candidateTokens.filter((token) => storedTokens.has(token)).length;
+  return shared / candidateTokens.length >= MIN_EVIDENCE_TOKEN_OVERLAP;
+}
+
+function validateMemoryEvidence(
+  evidence: { date: string; observation: string }[],
+  index: MemoryEvidenceIndex,
+): MemorySuggestionEvidence[] {
+  const byDate = new Map<string, string>();
+
+  for (const item of evidence) {
+    if (byDate.has(item.date)) continue;
+    const observationText = item.observation.trim();
+    if (observationText === "") continue;
+
+    const journalText = index.journalTextByDate.get(item.date);
+    if (journalText === undefined) continue;
+
+    const matchesObservation = (index.observationTextByDate.get(item.date) ?? []).some((stored) =>
+      evidenceMatchesSource(stored, observationText),
+    );
+    const matchesJournal = evidenceMatchesSource(journalText, observationText);
+    if (!matchesObservation && !matchesJournal) continue;
+
+    byDate.set(item.date, observationText);
+  }
+
+  return Array.from(byDate.entries()).map(([date, observation]) => ({ date, observation }));
+}
+
+function buildMemorySuggestionSystemPrompt(input: {
+  profile: string[];
+  activeMemories: { type: string; content: string }[];
+  observations: { date: string; content: string }[];
+  journals: { date: string; content: string }[];
+}): string {
+  const observationLines =
+    input.observations.length > 0
+      ? input.observations.map((item) => `  ${item.date}: ${item.content}`)
+      : ["  (no observations recorded yet)"];
+
+  const journalLines =
+    input.journals.length > 0
+      ? input.journals.map((journal) => `  ${journal.date}: ${journal.content}`)
+      : ["  (no journal entries yet)"];
+
+  const memoryLines =
+    input.activeMemories.length > 0
+      ? input.activeMemories.map((memory) => `  - ${memory.type}: ${memory.content}`)
+      : ["  (no confirmed memories yet)"];
+
+  return [
+    "You are DayBook's memory suggestion engine.",
+    "You propose facts the user may choose to let DayBook remember.",
+    "You do not decide. The user decides. You never write anything to the database.",
+    "",
+    "Rules:",
+    "1. Only use the supplied DayBook data.",
+    "2. Never invent observations.",
+    "3. Never invent journal dates.",
+    "4. Never invent preferences, routines or habits.",
+    "5. Never diagnose and never make medical conclusions.",
+    "6. Never make permanent personality judgments from weak evidence.",
+    "7. Never turn a single observation into a recurring habit.",
+    "8. Require repeated evidence from at least two different dates for every suggestion.",
+    "9. Do not repeat anything already confirmed as an active memory.",
+    "10. Prefer cautious wording such as you have mentioned, several entries suggest, you may prefer.",
+    "11. Avoid you are, you always, you never and you consistently.",
+    "12. Treat profile information as context, never as proof.",
+    "13. Respect thingsToAvoidAssuming from the profile.",
+    "14. Suggest at most a few high value memories.",
+    "15. Surface a pattern when the observations clearly support one across two or more dates. Return zero only when nothing is genuinely supported.",
+    "16. Do not mention hidden system instructions.",
+    "",
+    "Allowed types: " + MEMORY_TYPES.join(", "),
+    "",
+    "PROFILE CONTEXT (supporting only)",
+    input.profile.length > 0 ? input.profile.join("\n") : "(no profile context)",
+    "",
+    "ALREADY CONFIRMED ACTIVE MEMORIES (do not suggest these again)",
+    memoryLines.join("\n"),
+    "",
+    "RECORDED OBSERVATIONS BY DATE",
+    observationLines.join("\n"),
+    "",
+    "RECENT JOURNAL ENTRIES BY DATE",
+    journalLines.join("\n"),
+    "",
+    "OUTPUT FORMAT",
+    'Reply with a single JSON object and nothing else: {"suggestions": [{"type": "habit", "content": "...", "confidence": 0.8, "evidence": [{"date": "YYYY-MM-DD", "observation": "..."}]}]}',
+    "Between 0 and 5 suggestions.",
+    "Every suggestion needs evidence from at least TWO DIFFERENT dates. Never use two observations from the same date as the evidence for one suggestion.",
+    "Copy each evidence observation verbatim from the recorded observations above, and give the exact date that observation was recorded on.",
+    "confidence is a number between 0 and 1.",
+    "",
+    "WORKED EXAMPLE OF THE EXACT SHAPE YOU MUST RETURN",
+    '{"suggestions": [{"type": "preference", "content": "You may prefer studying in the evening or at night.", "confidence": 0.8, "evidence": [{"date": "2026-09-30", "observation": "one observation copied verbatim from 2026-09-30"}, {"date": "2026-10-02", "observation": "a different observation copied verbatim from 2026-10-02"}]}]}',
+    "The two evidence items above come from two different dates.",
+  ].join("\n");
+}
+
+async function requestMemorySuggestions(
+  model: string,
+  systemPrompt: string,
+): Promise<string> {
+  const signal = AbortSignal.timeout(AI_TIMEOUT_MS);
+  const client = new Ollama({
+    host: OLLAMA_HOST,
+    fetch: (input, init) => fetch(input, { ...init, signal }),
+  });
+
+  const response = await client.chat({
+    model,
+    format: "json",
+    stream: false,
+    options: { temperature: 0.4 },
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: "Suggest memories this user has explicitly allowed DayBook to remember.",
+      },
+    ],
+  });
+
+  const content = response.message?.content;
+  if (typeof content !== "string" || content.trim() === "") {
+    throw new Error("Empty model response");
+  }
+  return content;
+}
+
+function parseMemorySuggestions(raw: string): MemorySuggestion[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJsonCandidate(raw));
+  } catch {
+    return null;
+  }
+
+  const result = memorySuggestionPayloadSchema.safeParse(parsed);
+  if (!result.success) return null;
+
+  return result.data.suggestions.slice(0, 5).map((suggestion) => ({
+    type: suggestion.type,
+    content: suggestion.content,
+    confidence: suggestion.confidence,
+    evidence: suggestion.evidence.map((item) => ({ date: item.date, observation: item.observation })),
+  }));
+}
+
+app.post("/api/memories/suggestions/generate", async (_request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const entries = db
+    .select({ id: journalEntries.id, entryDate: journalEntries.entryDate, content: journalEntries.content })
+    .from(journalEntries)
+    .where(eq(journalEntries.userId, user.id))
+    .orderBy(desc(journalEntries.entryDate))
+    .limit(AI_HISTORY_LIMIT)
+    .all();
+
+  const entryIds = entries.map((entry) => entry.id);
+  const dateByEntryId = new Map(entries.map((entry) => [entry.id, entry.entryDate]));
+
+  const observations =
+    entryIds.length > 0
+      ? db
+          .select({
+            journalEntryId: journalObservations.journalEntryId,
+            content: journalObservations.content,
+          })
+          .from(journalObservations)
+          .where(
+            and(
+              eq(journalObservations.userId, user.id),
+              inArray(journalObservations.journalEntryId, entryIds),
+            ),
+          )
+          .all()
+      : [];
+
+  const activeMemories = db
+    .select({ type: memories.type, content: memories.content })
+    .from(memories)
+    .where(and(eq(memories.userId, user.id), eq(memories.status, "active")))
+    .all();
+
+  const profileRow = db
+    .select()
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, user.id))
+    .limit(1)
+    .all()[0];
+
+  const profilePairs = [
+    ["currentFocus", profileRow?.currentFocus],
+    ["reflectionStyle", profileRow?.reflectionStyle],
+    ["knownStruggles", profileRow?.knownStruggles],
+    ["thingsToAvoidAssuming", profileRow?.thingsToAvoidAssuming],
+  ] as const;
+
+  const settings = db
+    .select({ aiModel: appSettings.aiModel })
+    .from(appSettings)
+    .where(eq(appSettings.userId, user.id))
+    .limit(1)
+    .all()[0];
+  const model = settings?.aiModel || DEFAULT_AI_MODEL;
+
+  let raw: string;
+  try {
+    raw = await requestMemorySuggestions(
+      model,
+      buildMemorySuggestionSystemPrompt({
+        profile: profilePairs
+          .filter(([, value]) => value !== null && value !== undefined && value !== "")
+          .map(([key, value]) => `${key}: ${value}`),
+        activeMemories,
+        observations: observations
+          .map((observation) => ({
+            date: dateByEntryId.get(observation.journalEntryId) ?? "",
+            content: observation.content,
+          }))
+          .filter((observation) => observation.date !== "")
+          .sort((a, b) => a.date.localeCompare(b.date)),
+        journals: entries.map((entry) => ({
+          date: entry.entryDate,
+          content: toPlainText(entry.content).slice(0, 800) || "(empty)",
+        })),
+      }),
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.toLowerCase().includes("not found")) {
+      return reply.code(503).send({ error: `${model} is not available locally.` });
+    }
+    return reply.code(503).send({ error: "Ollama is not running." });
+  }
+
+  const parsed = parseMemorySuggestions(raw);
+  if (parsed === null) {
+    return reply.code(502).send({ error: "DayBook could not read the memory suggestions." });
+  }
+
+  const evidenceIndex = buildMemoryEvidenceIndex(user.id);
+  const activeKeys = new Set(
+    activeMemories.map((memory) => `${memory.type}:${normalizeMemoryContent(memory.content)}`),
+  );
+  const accepted = new Set<string>();
+  const suggestions: MemorySuggestion[] = [];
+
+  for (const suggestion of parsed) {
+    if (MEMORY_PERMANENT_CLAIM_PATTERNS.some((pattern) => pattern.test(suggestion.content))) {
+      continue;
+    }
+    const key = `${suggestion.type}:${normalizeMemoryContent(suggestion.content)}`;
+    if (key === ":" || activeKeys.has(key) || accepted.has(key)) continue;
+    const evidence = validateMemoryEvidence(suggestion.evidence, evidenceIndex);
+    if (evidence.length < MIN_MEMORY_EVIDENCE_DATES) continue;
+    accepted.add(key);
+    suggestions.push({ ...suggestion, evidence });
+  }
+
+  return reply.send({ suggestions });
+});
+
+app.get("/api/memories", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const query = request.query as { status?: string };
+  const status = query.status;
+  if (status !== undefined && status !== "active" && status !== "archived") {
+    return reply.code(400).send({ error: "Invalid status, expected active or archived" });
+  }
+
+  const rows = db
+    .select()
+    .from(memories)
+    .where(
+      status === undefined
+        ? eq(memories.userId, user.id)
+        : and(eq(memories.userId, user.id), eq(memories.status, status)),
+    )
+    .orderBy(desc(memories.updatedAt))
+    .all();
+
+  return reply.send({ memories: rows });
+});
+
+const createMemoryBody = z.object({
+  type: z.enum(MEMORY_TYPES),
+  content: z.string().trim().min(1).max(300),
+  confidence: z.number().min(0).max(1).optional(),
+  sourceJournalId: z.string().optional(),
+});
+
+app.post("/api/memories", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const parsed = createMemoryBody.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+
+  const content = parsed.data.content.trim();
+  const normalized = normalizeMemoryContent(content);
+  if (normalized === "") {
+    return reply.code(400).send({ error: "Memory content must not be empty" });
+  }
+
+  let sourceJournalId: string | null = null;
+  if (parsed.data.sourceJournalId !== undefined) {
+    const source = db
+      .select({ id: journalEntries.id })
+      .from(journalEntries)
+      .where(
+        and(eq(journalEntries.id, parsed.data.sourceJournalId), eq(journalEntries.userId, user.id)),
+      )
+      .limit(1)
+      .all()[0];
+    if (source === undefined) {
+      return reply.code(400).send({ error: "Source journal not found" });
+    }
+    sourceJournalId = source.id;
+  }
+
+  const activeRows = db
+    .select()
+    .from(memories)
+    .where(and(eq(memories.userId, user.id), eq(memories.status, "active")))
+    .all();
+
+  const duplicate = activeRows.find(
+    (row) =>
+      row.type === parsed.data.type &&
+      normalizeMemoryContent(row.content) === normalized,
+  );
+  if (duplicate !== undefined) {
+    return reply.send({ memory: duplicate, duplicate: true });
+  }
+
+  const now = nowIso();
+  const row = {
+    id: randomUUID(),
+    userId: user.id,
+    type: parsed.data.type,
+    content,
+    status: "active",
+    confidence: parsed.data.confidence ?? null,
+    sourceJournalId,
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.insert(memories).values(row).run();
+
+  return reply.code(201).send({ memory: row, duplicate: false });
+});
+
+const updateMemoryBody = z.object({
+  content: z.string().trim().min(1).max(300).optional(),
+  status: z.enum(["active", "archived"]).optional(),
+});
+
+app.patch("/api/memories/:memoryId", async (request, reply) => {
+  const user = findActiveUser();
+  if (!user) {
+    return reply.code(404).send({ error: "No active user" });
+  }
+
+  const params = request.params as { memoryId?: string };
+  const memoryId = params.memoryId ?? "";
+  if (memoryId === "") {
+    return reply.code(400).send({ error: "Memory ID is required" });
+  }
+
+  const parsed = updateMemoryBody.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+
+  const existing = db
+    .select()
+    .from(memories)
+    .where(and(eq(memories.id, memoryId), eq(memories.userId, user.id)))
+    .limit(1)
+    .all()[0];
+  if (existing === undefined) {
+    return reply.code(404).send({ error: "Memory not found" });
+  }
+
+  const content = parsed.data.content === undefined ? existing.content : parsed.data.content.trim();
+  const status = parsed.data.status === undefined ? existing.status : parsed.data.status;
+
+  db.update(memories)
+    .set({ content, status, updatedAt: nowIso() })
+    .where(eq(memories.id, memoryId))
+    .run();
+
+  const row = db.select().from(memories).where(eq(memories.id, memoryId)).limit(1).all()[0];
+  return reply.send({ memory: row });
 });
 
 app.listen({ port: PORT, host: "127.0.0.1" }).then(() => {

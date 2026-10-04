@@ -12,6 +12,7 @@ import {
   Plus,
   Trash2,
   MapPin,
+  Brain,
   Sparkles,
   Loader2,
   Flame,
@@ -27,6 +28,8 @@ import type {
   JournalGoal,
   DailyQuoteResponse,
   JournalObservation,
+  MemorySuggestion,
+  StoredMemory,
 } from '../lib/api'
 import {
   createJournalGoal,
@@ -38,6 +41,10 @@ import {
   getJournalObservations,
   generateJournalObservations,
   updateJournalGoal,
+  getMemories,
+  generateMemorySuggestions,
+  confirmMemory,
+  updateMemory,
 } from '../lib/api'
 
 type WeatherType = 'sunny' | 'partlyCloudy' | 'rainy' | 'windy' | 'snowy'
@@ -96,6 +103,12 @@ export function OpenJournalSpread({
   } | null>(null)
   const [observationError, setObservationError] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [memories, setMemories] = useState<StoredMemory[]>([])
+  const [memorySuggestions, setMemorySuggestions] = useState<MemorySuggestion[]>([])
+  const [isSuggesting, setIsSuggesting] = useState(false)
+  const [memoryError, setMemoryError] = useState<string | null>(null)
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
+  const [memoryDraft, setMemoryDraft] = useState('')
   const [entryHtml, setEntryHtml] = useState('')
   const [entryText, setEntryText] = useState('')
   const [locationText, setLocationText] = useState('')
@@ -710,6 +723,79 @@ export function OpenJournalSpread({
     }
   }
 
+  useEffect(() => {
+    let cancelled = false
+
+    getMemories('active')
+      .then((items) => {
+        if (!cancelled) setMemories(items)
+      })
+      .catch(() => {
+        if (!cancelled) setMemoryError('Could not load memories')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function findPatterns() {
+    if (isSuggesting) return
+
+    setIsSuggesting(true)
+    setMemoryError(null)
+    try {
+      setMemorySuggestions(await generateMemorySuggestions())
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Could not find patterns')
+    } finally {
+      setIsSuggesting(false)
+    }
+  }
+
+  async function handleRememberSuggestion(suggestion: MemorySuggestion) {
+    setMemoryError(null)
+    try {
+      await confirmMemory({
+        type: suggestion.type,
+        content: suggestion.content,
+        confidence: suggestion.confidence,
+      })
+      setMemorySuggestions((prev) => prev.filter((item) => item.content !== suggestion.content))
+      setMemories(await getMemories('active'))
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Could not save memory')
+    }
+  }
+
+  function handleDismissSuggestion(suggestion: MemorySuggestion) {
+    setMemorySuggestions((prev) => prev.filter((item) => item.content !== suggestion.content))
+  }
+
+  async function handleArchiveMemory(id: string) {
+    setMemoryError(null)
+    try {
+      await updateMemory(id, { status: 'archived' })
+      setMemories((prev) => prev.filter((item) => item.id !== id))
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Could not archive memory')
+    }
+  }
+
+  async function handleSaveMemoryEdit(id: string) {
+    const content = memoryDraft.trim()
+    if (content === "") return
+
+    setMemoryError(null)
+    try {
+      const updated = await updateMemory(id, { content })
+      setMemories((prev) => prev.map((item) => (item.id === id ? updated : item)))
+      setEditingMemoryId(null)
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : 'Could not update memory')
+    }
+  }
+
   const handleSave = async () => {
     if (!onSave || !entryDate || isLoading) return
     const html = editorRef.current?.innerHTML ?? entryHtml
@@ -1107,6 +1193,147 @@ export function OpenJournalSpread({
                         void generateObservations()
                       }}
                       disabled={isGenerating}
+                      className="underline ml-1 cursor-pointer disabled:opacity-50"
+                    >
+                      Retry
+                    </button>
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-1.5 flex-shrink-0 border-t border-slate-200/60">
+                <div className="flex items-center justify-between pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <Brain className="w-3 h-3 text-[#4f8ee6]" />
+                    <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">
+                      DayBook Remembers
+                    </span>
+                    <span className="text-[9px] text-slate-400">{memories.length}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void findPatterns()
+                    }}
+                    disabled={isSuggesting}
+                    className="text-[9px] font-medium text-[#4f8ee6] hover:text-[#5b9fe0] disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    {isSuggesting ? 'Looking...' : 'Find patterns'}
+                  </button>
+                </div>
+
+                {isSuggesting && (
+                  <p className="text-[9px] text-slate-400 italic flex items-center gap-1.5 pb-0.5">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-[#4f8ee6]" />
+                    Looking across your entries...
+                  </p>
+                )}
+
+                {memorySuggestions.length === 0 && memories.length === 0 && !isSuggesting && (
+                  <p className="text-[9px] text-slate-400 italic">Nothing saved yet.</p>
+                )}
+
+                <div className="space-y-1 max-h-[58px] overflow-y-auto pr-0.5 scrollbar-none">
+                  {memorySuggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.content}
+                      className="p-1.5 rounded-md bg-[#eff6fc]/70 border border-[#6eafe9]/25"
+                    >
+                      <p className="text-[10px] text-[#1a2b49] leading-snug">{suggestion.content}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">
+                        Based on {suggestion.evidence.map((item) => item.date).join(' and ')}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1 text-[9px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleRememberSuggestion(suggestion)
+                          }}
+                          className="text-[#4f8ee6] font-semibold hover:underline cursor-pointer"
+                        >
+                          Remember this
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDismissSuggestion(suggestion)}
+                          className="text-slate-400 hover:underline cursor-pointer"
+                        >
+                          Not now
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {memories.map((memory) => (
+                    <div key={memory.id} className="p-1.5 rounded-md bg-white border border-slate-200/60">
+                      {editingMemoryId === memory.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            value={memoryDraft}
+                            onChange={(e) => setMemoryDraft(e.target.value)}
+                            className="flex-1 min-w-0 text-[10px] px-1.5 py-0.5 rounded bg-white border border-[#6eafe9] text-slate-700 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleSaveMemoryEdit(memory.id)
+                            }}
+                            className="text-[9px] font-semibold text-[#4f8ee6] cursor-pointer"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingMemoryId(null)}
+                            className="text-[9px] text-slate-400 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-[#1a2b49] leading-snug">{memory.content}</p>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <span className="text-[8px] uppercase tracking-wider font-semibold text-slate-400">
+                              {memory.type}
+                            </span>
+                            <div className="flex items-center gap-2 text-[9px]">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMemoryId(memory.id)
+                                  setMemoryDraft(memory.content)
+                                }}
+                                className="text-slate-400 hover:text-[#4f8ee6] cursor-pointer"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleArchiveMemory(memory.id)
+                                }}
+                                className="text-slate-400 hover:text-rose-500 cursor-pointer"
+                              >
+                                Archive
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {memoryError && (
+                  <p className="text-[9px] text-rose-600 pt-1">
+                    {memoryError}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void findPatterns()
+                      }}
+                      disabled={isSuggesting}
                       className="underline ml-1 cursor-pointer disabled:opacity-50"
                     >
                       Retry
